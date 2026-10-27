@@ -5,7 +5,7 @@
 <section class="panel" aria-label="Study statistics"><div class="stats"><div><div class="stat" id="total">0</div><small>Cards</small></div><div><div class="stat" id="reviewed">0</div><small>Reviews</small></div><div><div class="stat" id="correct">0%</div><small>Recall accuracy</small></div></div></section>
 <div class="grid"><section class="panel"><h2>Create a flashcard</h2><form id="create"><label for="question">Question</label><textarea id="question" maxlength="500" required placeholder="What is the Pythagorean theorem?"></textarea><label for="answer">Answer</label><textarea id="answer" maxlength="1000" required placeholder="a² + b² = c²"></textarea><button type="submit">Add flashcard</button></form><p class="muted">Your cards are saved in this browser, without an account.</p></section>
 <section class="panel"><h2>Practice</h2><p class="muted" id="position" aria-live="polite">Add a card to start.</p><div class="cardface" id="face" aria-live="polite">Your next question appears here.</div><div class="actions"><button id="flip" type="button" class="secondary">Reveal answer</button><button id="know" type="button">I knew it</button><button id="retry" type="button" class="secondary">Practice again</button></div><p class="muted">Try answering aloud before revealing the answer.</p></section></div>
-<section class="panel"><h2>Your flashcards</h2><ul id="cards" class="list"></ul><button id="export" class="secondary" type="button">Export cards as JSON</button></section>
+<section class="panel"><h2>Your flashcards</h2><ul id="cards" class="list"></ul><div class="actions"><button id="export" class="secondary" type="button">Export cards as JSON</button><button id="importButton" class="secondary" type="button">Import backup</button><input id="importFile" type="file" accept=".json,application/json" hidden aria-label="Import flashcard backup"></div><p id="importStatus" class="muted" role="status"></p></section>
 </main><script>
 (function(){
 const KEY="study-ai-cards-v1", STATS="study-ai-stats-v1";
@@ -32,6 +32,22 @@ el("flip").onclick=()=>{revealed=!revealed;render()};
 function grade(known){if(!cards.length)return;stats.reviews++;if(known)stats.known++;if(!known){const [card]=cards.splice(current,1);cards.push(card)}else{current=(current+1)%cards.length}revealed=false;save();render()}
 el("know").onclick=()=>grade(true);el("retry").onclick=()=>grade(false);
 el("export").onclick=()=>{const blob=new Blob([JSON.stringify({cards,stats,exportedAt:new Date().toISOString()},null,2)],{type:"application/json"});const url=URL.createObjectURL(blob);const a=document.createElement("a");a.href=url;a.download="study-ai-flashcards.json";a.click();setTimeout(()=>URL.revokeObjectURL(url),1000)};
+el("importButton").onclick=()=>el("importFile").click();
+el("importFile").onchange=async e=>{
+const file=e.target.files&&e.target.files[0];if(!file)return;
+try{
+ if(file.size>2_000_000)throw Error("Backup is too large (2 MB maximum).");
+ const parsed=JSON.parse(await file.text());
+ if(!parsed||!Array.isArray(parsed.cards)||parsed.cards.length>10000)throw Error("Not a valid Study.ai backup.");
+ const imported=parsed.cards.map(c=>({id:c.id,q:c.q,a:c.a})).filter(c=>typeof c.id==="string"&&typeof c.q==="string"&&typeof c.a==="string"&&c.q.length<=500&&c.a.length<=1000);
+ if(imported.length!==parsed.cards.length)throw Error("Backup contains invalid flashcards.");
+ const ids=new Set();cards=imported.map(c=>({...c,id:ids.has(c.id)?c.id+"-"+Math.random().toString(36).slice(2):c.id})).filter(c=>{ids.add(c.id);return true});
+ const importedStats=parsed.stats;
+ stats=importedStats&&Number.isSafeInteger(importedStats.reviews)&&Number.isSafeInteger(importedStats.known)&&importedStats.known>=0&&importedStats.reviews>=importedStats.known?{reviews:importedStats.reviews,known:importedStats.known}:{reviews:0,known:0};
+ current=0;revealed=false;save();render();el("importStatus").textContent="Imported "+cards.length+" flashcards. Existing cards were replaced.";
+}catch(error){el("importStatus").textContent="Import failed: "+error.message}
+e.target.value="";
+};
 render();
 })();
 </script></body></html>
