@@ -1,0 +1,21 @@
+import assert from 'node:assert/strict';
+const base='http://127.0.0.1:5173';
+async function call(path,data,cookie=true,origin=base){const r=await fetch(base+'/api/'+path,{method:data?'POST':'GET',headers:{...(cookie?{cookie:'__sites_local_auth=1'}:{}),...(data?{'Content-Type':'application/json',Origin:origin}:{})},body:data?JSON.stringify(data):undefined});const raw=await r.text();let body;try{body=JSON.parse(raw);}catch{body={error:raw};}return {status:r.status,body};}
+assert.equal((await call('state',null,false)).status,401);
+const c=await call('courses',{name:'Integration test Biology',teacher:'Sample teacher'});assert.equal(c.status,200);const cid=c.body.id;
+assert.equal((await call('items',{course_id:cid,title:'Definitions',kind:'note',content:'Mitosis: Cell division into two identical daughter cells.\nOsmosis: Water crosses a selectively permeable membrane.'})).status,200);
+assert.equal((await call('items',{course_id:cid,title:'Quiz',kind:'quiz',date:'2026-10-20',score:8,total:10})).status,200);
+const s=await call('state');assert.equal(s.body.analyses.find(a=>a.course.id===cid).grade,80);
+assert.equal((await call('courses',{name:'Blocked'},true,'https://other.example')).status,403);
+assert.equal((await call('items',{course_id:'someone-elses-course',title:'Blocked',kind:'note'})).status,404);
+const before=s.body.items.length;
+assert.equal((await call('import',{course_id:cid,items:[{title:'Fine',kind:'note'},{title:'Invalid',kind:'bad'}]})).status,400);
+assert.equal((await call('state')).body.items.length,before);
+const g=await call('generate',{course_id:cid});assert.equal(g.status,200);const did=g.body.id;
+assert.equal((await call('state')).body.decks.find(d=>d.id===did).cards.length,2);
+assert.equal((await call('review',{deck_id:did,card:0,known:true})).status,200);
+assert.equal((await call('attempt',{deck_id:did,correct:1,total:2})).status,200);
+const result=await call('state');assert.equal(result.body.decks.find(d=>d.id===did).reviews[0].interval,1);assert.equal(result.body.attempts.find(a=>a.deck_id===did).correct,1);
+assert.equal((await call('delete',{type:'course',id:cid})).status,200);
+const after=await call('state');assert.ok(!after.body.items.some(i=>i.course_id===cid));assert.ok(!after.body.decks.some(d=>d.id===did));assert.ok(!after.body.attempts.some(a=>a.deck_id===did));
+console.log('Hosted API checks passed: authentication, persistence, isolation, CSRF, atomic validation, grades, cards, reviews, attempts, and cascade deletion.');
