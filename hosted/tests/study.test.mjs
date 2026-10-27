@@ -1,0 +1,15 @@
+import {test} from 'node:test';
+import assert from 'node:assert/strict';
+import {analyze,makeCards,itemValues,date,dayAdd} from '../lib/study.mjs';
+const course={id:'biology',name:'Biology'};
+const item=(d={})=>({id:'item',course_id:'biology',...itemValues({title:'Test',kind:'note',date:'2026-09-01',...d})});
+test('empty coursework has no invented grade or prediction',()=>{const a=analyze(course,[]);assert.equal(a.grade,null);assert.equal(a.prediction,null);});
+test('weights apply to grade percentages',()=>{assert.equal(analyze(course,[item({score:5,total:10,weight:1}),item({score:10,total:10,weight:3})]).grade,87.5);});
+test('median intervals produce an evidence-backed window',()=>{const items=['01','08','15','22'].map((d,i)=>item({id:String(i),kind:'quiz',date:'2026-09-'+d,score:7+i,total:10}));const a=analyze(course,items);assert.equal(a.prediction.date,'2026-09-29');assert.equal(a.prediction.confidence,'Low');assert.equal(a.prediction.stale,true);assert.equal(a.trend,20);assert.equal(a.evidence.length,4);});
+test('two assessments do not produce a forecast',()=>{assert.equal(analyze(course,[item({kind:'quiz'}),item({kind:'test',date:'2026-09-08'})]).prediction,null);});
+test('definitions retain source attribution and deduplicate',()=>{const cards=makeCards([item({content:'Osmosis: Water crosses a selectively permeable membrane.\nOsmosis: Water crosses a selectively permeable membrane.'})]);assert.equal(cards.length,1);assert.equal(cards[0].question,'Osmosis');assert.equal(cards[0].source_id,'item');});
+test('sentences become cloze cards while instructions are skipped',()=>{const cards=makeCards([item({content:'Read the chapter and complete the assignment.\nMitochondria provide energy for the cell.'})]);assert.equal(cards.length,1);assert.ok(cards[0].question.includes('____'));});
+test('invalid grades and types are rejected',()=>{for(const bad of [{score:NaN,total:10},{score:3},{total:0},{weight:0},{kind:'other'},{score:Infinity,total:100}])assert.throws(()=>item(bad));});
+test('impossible dates are rejected',()=>{assert.throws(()=>date('2026-02-30'));assert.throws(()=>date('tomorrow'));assert.equal(date('2026-10-27'),'2026-10-27');});
+test('homework weekdays and recurring topics use actual sources',()=>{const a=analyze(course,[item({kind:'homework',due:'2026-09-07',content:'Osmosis: Water crosses a selectively permeable membrane.'}),item({content:'Osmosis: Water crosses a selectively permeable membrane.'})]);assert.deepEqual(a.homework_days,[['Monday',1]]);assert.equal(a.topics.find(t=>t[0]==='osmosis')[1],2);});
+test('review day arithmetic crosses calendar boundaries',()=>{assert.equal(dayAdd('2026-12-31',1),'2027-01-01');});
