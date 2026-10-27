@@ -1,0 +1,14 @@
+import { readFileSync } from 'node:fs';
+import assert from 'node:assert/strict';
+import { Script } from 'node:vm';
+const html=readFileSync(new URL('../index.html',import.meta.url),'utf8');
+const script=html.match(/<script>([\s\S]*?)<\/script>/)?.[1];
+assert.ok(script,'Application script exists');
+new Script(script,{filename:'study-app.js'});
+const ids=[...html.matchAll(/\bid="([^"]+)"/g)].map(m=>m[1]);
+assert.equal(new Set(ids).size,ids.length,'No duplicate element IDs');
+for(const id of ['create','question','answer','cards','face','flip','know','retry','next','due','search','dueOnly','importButton','importFile','export','importStatus']) assert.ok(ids.includes(id),id+' exists');
+for(const id of [...script.matchAll(/el\("([^"]+)"\)/g)].map(m=>m[1])) assert.ok(ids.includes(id),'Referenced DOM element '+id+' exists');
+assert.ok(script.includes('!revealed'),'Grading requires answer reveal');
+assert.ok(script.includes('isDue'),'Due review logic exists');
+console.log('Study.ai structural and JavaScript syntax checks passed');
