@@ -1,5 +1,7 @@
 # Study.ai
 
+**Public website:** https://study-ai-student-workspace.goodbread2051.chatgpt.site
+
 The public hosted version is in [`hosted/`](hosted/README.md), using durable cloud storage and Sites-managed sign-in. The Python version below remains available for self-hosting.
 
 A self-hosted student workspace that turns coursework into a study routine. The core app runs without paid APIs, subscriptions, external AI, analytics, hosted fonts, or a cloud database. Python serves the app and stores account data in SQLite. The only runtime package is an open-source PDF reader.
