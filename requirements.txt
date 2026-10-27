@@ -1,0 +1,2 @@
+# Only PDF extraction needs a third-party library. No paid services.
+pypdf==6.21.3
