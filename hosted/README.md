@@ -42,3 +42,13 @@ The domain tests check grade weighting, forecasts, attribution, deduplication, c
 Publish through the Sites workflow with the project ID in `.openai/hosting.json`. The hosted database is separate from local previews and from the original Python app. Keep generated build output, local state, and credentials out of Git. The PDF worker in `public/` comes from the installed `pdfjs-dist` package; refresh it when updating that package and preserve its license header.
 
 Core operations have no app-level paid feature gates. File imports have resource limits (1.5 MB, 100 PDF pages, 200,000 extracted characters; CSV up to 500 rows) to keep browser/server work bounded. Hosting and Google service quotas still apply. This deployment is not an independent security/compliance certification; the owner remains responsible for privacy/consent policies and operating the student service appropriately.
+
+## Guest mode and the 50-feature expansion
+
+Choose **Continue as guest** on the entry screen to use the app without signing in. Guest records remain in that browser's local storage (or temporary memory if browser storage is blocked). They are never written to the hosted account database. The guest banner makes the storage boundary visible. Export a JSON backup before clearing browser data. Leaving guest mode does not erase the local guest copy.
+
+Signed-in students can import this browser's guest work from Progress. Imports create new course/material/set/tool records with new IDs; they do not overwrite existing account records. Review schedules and game history restart on restored sets. Google authorization still requires a signed-in account and the existing provider consent process.
+
+The full, numbered list of exactly 50 additions is in [FEATURES.md](FEATURES.md) and in the app's **What's new** page. Tool entries use the existing owned-record database schema, so this release needs no schema migration. Server-side validation and ownership checks apply to all signed-in tool writes and restores. No Google secrets or existing account records are changed by this update.
+
+Added validation: `node --test tests/study.test.mjs tests/upgrade.test.mjs` (24 checks), plus `node tests/http-check.mjs` against a running local preview for account-backed tools and restore flows. Browser checks cover guest entry and reload persistence, task details/subtasks/priorities, reverse/starred/typing cards, mistake logging, focus elapsed-time logging, and explanation feedback. The checklist in FEATURES.md describes functionality; it is not a claim of an independent audit of all 50 workflows.

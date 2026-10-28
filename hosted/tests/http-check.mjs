@@ -16,6 +16,14 @@ assert.equal((await call('state')).body.decks.find(d=>d.id===did).cards.length,2
 assert.equal((await call('review',{deck_id:did,card:0,known:true})).status,200);
 assert.equal((await call('attempt',{deck_id:did,correct:1,total:2})).status,200);
 const result=await call('state');assert.equal(result.body.decks.find(d=>d.id===did).reviews[0].interval,1);assert.equal(result.body.attempts.find(a=>a.deck_id===did).correct,1);
+const task=await call('tools',{kind:'task',payload:{title:'Hosted test task',priority:1,estimate:25,subtasks:[{title:'Read',done:false}],course_id:cid}});assert.equal(task.status,200);
+assert.equal((await call('tools',{kind:'task',payload:{title:'Anonymous'}},false)).status,401);
+assert.equal((await call('tools',{id:'another-users-record',kind:'task',payload:{title:'Blocked'}})).status,404);
+assert.equal((await call('tools',{kind:'reading',payload:{title:'Bad link',url:'javascript:alert(1)'}})).status,400);
+assert.equal((await call('tools',{kind:'bookmark',payload:{deck_id:did,card:0}})).status,200);
+assert.ok((await call('state')).body.extras.some(e=>e.id===task.body.id));
+const restored=await call('restore',{backup:{courses:[{id:'external',name:'Restored test class',user_id:'foreign'}],items:[{title:'Restored notes',kind:'note',course_id:'external'}],decks:[],extras:[]}});assert.equal(restored.status,200);assert.equal(restored.body.count,2);
+const restoredState=(await call('state')).body;const restoredCourse=restoredState.courses.find(c=>c.name==='Restored test class');assert.notEqual(restoredCourse.id,'external');assert.notEqual(restoredCourse.user_id,'foreign');await call('delete',{type:'course',id:restoredCourse.id});
 assert.equal((await call('delete',{type:'course',id:cid})).status,200);
-const after=await call('state');assert.ok(!after.body.items.some(i=>i.course_id===cid));assert.ok(!after.body.decks.some(d=>d.id===did));assert.ok(!after.body.attempts.some(a=>a.deck_id===did));
+const after=await call('state');assert.ok(!after.body.items.some(i=>i.course_id===cid));assert.ok(!after.body.decks.some(d=>d.id===did));assert.ok(!after.body.attempts.some(a=>a.deck_id===did));assert.ok(!after.body.extras.some(e=>e.id===task.body.id||e.payload.deck_id===did));
 console.log('Hosted API checks passed: authentication, persistence, isolation, CSRF, atomic validation, grades, cards, reviews, attempts, and cascade deletion.');

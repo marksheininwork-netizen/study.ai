@@ -14,5 +14,5 @@ jobs:
       - run: python -m pip install -r requirements.txt
       - run: python -m unittest -v
       - run: node --check public/app.js
-      - run: node --test hosted/tests/study.test.mjs
+      - run: node --test hosted/tests/study.test.mjs hosted/tests/upgrade.test.mjs
       - run: node --check hosted/public/app.js
