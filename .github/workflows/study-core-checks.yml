@@ -1,0 +1,20 @@
+name: Study AI core checks
+on:
+  push:
+    branches: [feat/student-workspace]
+  pull_request:
+permissions:
+  contents: read
+jobs:
+  core-checks:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: JavaScript syntax
+        run: node --check hosted/public/app.js
+      - name: Study domain unit tests
+        run: node --test hosted/tests/study.test.mjs
