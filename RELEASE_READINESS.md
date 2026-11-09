@@ -18,7 +18,7 @@ This branch continues the existing Study AI app as the MindSpark Learning worksp
 
 `npm test` runs static checks, backend policy contract checks, and Chromium interactions at desktop and mobile viewports. It covers all eight products, task persistence, quizzes and competition questions, flashcard creation/review, Study AI legacy migration, valid and malformed backup imports, backup export/restore, math challenges, EssayCoach, focus timer behavior, and mocked account migration/isolation.
 
-GitHub Actions run 20 passed on PR head `9a8bab535504d5dddc7693e92e8d2a244023b0a2`. Static JavaScript and safety checks, RLS and sync contract checks, and desktop/mobile browser tests passed. Live Supabase auth, RLS isolation, and cross-device sync have not been verified.
+GitHub Actions run 21 passed on PR head `8752764c80777ec3a0a4998bbdbc52158419778d`. Static JavaScript and safety checks, RLS and sync contract checks, and desktop/mobile browser tests passed. Live Supabase auth, RLS isolation, and cross-device sync have not been verified.
 
 A real browser test against the deployed preview verified:
 - All eight products rendered on desktop and at a 390×844 mobile viewport, with no horizontal overflow on mobile.
@@ -36,7 +36,8 @@ This isolated Cloudflare Pages project deploys the MindSpark branch only. Produc
 
 ## Remaining release work
 
-- Create a separate Supabase organization and a dedicated development project, inspect it, apply the existing RLS migration, configure email OTP and preview redirects, and use only its publishable key in the client. The connected Supabase account currently lists only the existing “Business 1” organization, which has not been used. The account owner must sign in to the Supabase dashboard before I can create the requested new organization.
+- The signed-in Supabase dashboard has a separate “MindSpark” organization on the Free Plan with no projects. However, Supabase blocks free project creation because the account owner has already reached the limit of two active free projects across organizations. The project form is disabled and offers pausing/deleting an existing project or upgrading. I did not touch the unrelated Business 1 projects or upgrade the plan. To continue within the free tier, the account owner must free an active-project slot or provide access to a separate Supabase account with free-project capacity.
+- After a dedicated development project is available, inspect it, apply the existing RLS migration, configure email OTP and preview redirects, and use only its publishable key in the client.
 - Run real two-user OTP sign-in/sign-out, guest-to-account migration, cross-device sync, conflict resolution, account switching, backup restoration, and unauthorized RLS denial tests. Cloud sync remains disabled until these tests pass.
 - Complete an accessibility audit with assistive technology and a student privacy/minors review before public release.
 
