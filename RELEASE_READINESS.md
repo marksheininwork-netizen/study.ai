@@ -1,44 +1,39 @@
 # Release readiness
 
-## Scope
+## Scope and product state
 
-This branch continues the existing Study AI app as the MindSpark Learning workspace: Study AI, QuizArena, FlashcardLab, MathBattle, EssayCoach, FocusRoom, Competition Academy, and Educational Games Portal. MathifyX is out of scope and was not changed.
+This branch continues the existing Study AI project as the MindSpark Learning workspace: Study AI, QuizArena, FlashcardLab, MathBattle, EssayCoach, FocusRoom, Competition Academy, and Educational Games Portal. MathifyX is out of scope and was not changed.
 
-## Implemented
+The eight products, free guest access, local progress, legacy flashcard migration, merged backup imports, and local backup workflow remain available. Guest data stays on the current device unless the user exports it. EssayCoach uses transparent on-device writing signals and does not send draft text to an AI service. No live billing is enabled.
 
-- Eight student tools with responsive navigation, dashboards, local progress history, explanations, and student-facing limitation/privacy messages.
-- Free guest mode works without sign-in or a network connection.
-- Existing Study AI flashcards and recall totals migrate from legacy browser keys. Backup imports merge with current progress rather than replacing it.
-- Optional email one-time-code accounts and Supabase progress sync are implemented behind empty-by-default development configuration.
-- Sync uses a per-user RLS-protected row, account-specific local caches, optimistic concurrency retries, and local data preservation on sync failure.
-- SQL migration applies authenticated-only SELECT/INSERT/UPDATE policies tied to `auth.uid()`, enables and forces RLS, limits payload size, and revokes anonymous access.
-- EssayCoach uses transparent on-device writing signals, not an AI grader. Draft text is not sent to an AI service. No live billing is enabled.
+## Backend design
+
+- A dedicated Cloudflare D1 database named `mindspark-learning-staging` is bound only to the Pages **preview** environment. It contains a single progress table and currently has zero user rows. No unrelated database was changed.
+- The Pages Function stores one versioned JSON progress document per authenticated subject ID. It verifies Clerk RS256 session JWT signatures against the configured JWKS and validates issuer, authorized party, expiry, not-before, and subject. SQL statements are prepared and always scoped to that verified subject. Writes use optimistic version checks; conflicts return the latest server version. Same-origin checks apply to mutations.
+- Clerk is the selected optional identity provider; no custom password authentication is used. Its public publishable key and server-side issuer/JWKS configuration are empty on staging, so account controls stay unconfigured and cloud routes fail closed. No secret/service-role key is in frontend code.
+- The account prompt restricts cloud account setup to people aged 16 or older because Clerk's terms do not support processing under-16 end-user personal information without verifiable parental consent. Younger students can continue in full guest mode. MindSpark does not request a birth date or store student email addresses in D1.
+
+Cloudflare's current published free limits are up to 10 D1 databases, 500 MB per database, 5 GB total storage, 5 million rows read per day, and 100,000 rows written per day; daily read/write caps reset at UTC midnight. Workers Free allows 100,000 requests/day and 10 ms CPU per invocation. Limits can change; review the official [D1 limits](https://developers.cloudflare.com/d1/platform/limits/) and [Workers limits](https://developers.cloudflare.com/workers/platform/limits/) before launch. Clerk currently lists up to 50,000 monthly retained users on its free plan; verify [current plan details](https://clerk.com/pricing).
 
 ## Verification
 
-GitHub Actions [run 26](https://github.com/marksheininwork-netizen/study.ai/actions/runs/42552360149) passed on PR head `1209b8cf903ec46db6b48c50552d350b8dfce606`. It runs static/safety checks, RLS and sync contract checks, and Chromium desktop/mobile interactions. The browser suite covers all eight products, task persistence, quizzes and competition questions, flashcard creation/review, Study AI legacy migration, valid and malformed backup imports, backup export/restore, math challenges, EssayCoach, focus timer behavior, and mocked account migration/isolation.
-
-Automated axe-core checks cover WCAG 2.0, 2.1, and 2.2 A/AA rules across all eight product views at desktop and mobile sizes, plus the account dialog. The scan found muted-text contrast failures and an unlabeled FocusRoom duration selector; both were corrected. Automated checks passed on run 26. This is not a full assistive-technology audit.
-
-A real browser test against the deployed preview verified:
-- All eight products rendered on desktop and at a 390×844 mobile viewport, with no horizontal overflow on mobile.
-- Study AI task entry; correct QuizArena and Competition Academy answers; MathBattle scoring; Educational Games streak; EssayCoach feedback; and FocusRoom countdown, pause, and reset.
-- Quiz progress persisted after reload; flashcard creation and review worked; backup import merged a second card without removing the existing card.
-- The account dialog retains guest access and explicitly reports cloud sync is not configured.
-
-The CI suite completed the full backup export/import round-trip. In the live preview browser, clicking Export backup did not surface a downloadable file event, so live export remains unverified.
+- GitHub Actions [run 39](https://github.com/marksheininwork-netizen/study.ai/actions/runs/42554420767) passed on code head `fb807d5038587ce6bf1cdea664b57651fd72aac5`, including static checks, existing browser regressions, and D1/JWT security contract tests. The token tests generate real RSA-signed test tokens; D1 tests exercise two subject IDs, forged/expired/anonymous denial, stale-write conflicts, and account-scoped deletion against a D1 test double. These are not live Clerk or deployed D1 two-user tests.
+- Earlier automated axe-core checks passed WCAG 2.0/2.1/2.2 A/AA for all eight product views at desktop/mobile sizes and the account dialog after contrast and FocusRoom label fixes. A full assistive-technology audit remains outstanding.
+- The existing HTTPS preview was exercised in a real browser at desktop and 390×844 mobile sizes: all eight tools rendered; task entry, quiz and competition feedback, MathBattle scoring, game streaks, EssayCoach feedback, timer countdown/pause/reset, reload persistence, flashcard creation/review, and merging a backup import worked. The preview preserves the eight-product dashboard and guest access.
+- Live backup export now exposes a correctly named `mindspark-learning-backup.json` download link backed by a Blob URL, with an accessible fallback. The preview rendered that link, but the browser automation did not surface a completed download event. Treat deployed export as **not yet verified**; CI verifies export/import round-trip.
+- D1 was queried directly after setup: `mindspark_progress` exists and has zero rows.
+- Preview deployment `e0b45b22` succeeded on `fb807d5038587ce6bf1cdea664b57651fd72aac5`; the stable preview URL is below. The Cloudflare project reports production deployments disabled. A direct API check from this browser was blocked by its client policy, so deployed HTTP fail-closed status was not independently observed in that attempt; the account UI and function configuration show sync is unconfigured.
 
 ## Staging
 
 HTTPS preview: https://codex-mindspark-learning-wor.mindspark-learning-staging.pages.dev/
 
-This isolated Cloudflare Pages project deploys the MindSpark branch only. Production deployments are disabled. The existing public Study AI site was not changed.
+Cloudflare Pages project `mindspark-learning-staging` is connected to the existing PR branch only. The preview D1 binding is present; production has no D1 binding or environment variables configured. The existing public Study AI site was not changed.
 
-## Remaining release work
+## Remaining blockers
 
-- The signed-in Supabase dashboard has a separate “MindSpark” organization on the Free Plan with no projects. Supabase blocks free project creation because the account owner has reached the limit of two active free projects across organizations. The project form offers pausing/deleting an existing project or upgrading. I left both unrelated projects unchanged and did not upgrade. To continue within the free tier without interrupting other work, the owner must free a slot themselves or provide access to a separate Supabase account with free-project capacity.
-- No MindSpark Supabase project was created, so the existing RLS migration was not applied anywhere. After a dedicated development project is available, inspect it, apply the migration, configure email OTP and preview redirects, and use only its publishable key in the client.
-- Real two-user OTP sign-in/sign-out, guest-to-account migration, cross-device sync, conflict resolution, account switching, backup restoration, and unauthorized RLS denial remain unverified. Cloud sync remains disabled until these tests pass.
-- Complete an assistive-technology accessibility audit and a student privacy/minors review before public release.
+1. **Provider setup and real account tests:** The owner must create/configure a Clerk app, review/accept its terms, and provide its public publishable key. Then configure preview-only `CLERK_ISSUER`, `CLERK_JWKS_URL`, and `MINDSPARK_APP_ORIGIN` values in Cloudflare Pages. Do not put a secret key in the frontend. Two authorized test inboxes are needed to exercise actual email-code sign-in, sign-out, guest migration, cross-device sync, conflict resolution, switching, and account isolation against live D1.
+2. **Live backup download:** Confirm an actual browser download and restoration on the deployed preview. Current evidence confirms the accessible Blob download link but not a completed download event.
+3. **Student review:** Complete independent privacy/legal review for the intended jurisdictions and appropriate guardian-consent approach before accounts are opened to minors; complete an assistive-technology audit. The 16+ gate follows Clerk's current terms and is not a full compliance determination.
 
-No production deployment, billing change, or production Study AI change has been made. Do not enable live billing, merge, or point the public Study AI URL at this branch without the required approval.
+Production deployments remain disabled; PR #2 remains draft and unmerged. No live billing or production Study AI change was made.
