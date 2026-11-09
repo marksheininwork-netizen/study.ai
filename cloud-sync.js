@@ -39,7 +39,7 @@
       // Optimistic concurrency: if another device updates at the same time, reload and merge again.
       // Guest state is merged before every write, so account creation never replaces local progress.
       const owner = localStorage.getItem(OWNER_KEY);
-      if (owner !== user.id) {
+      if (owner && owner !== user.id) {
         const previous = owner ? window.mindsparkStore.read() : null;
         try { if (owner) localStorage.setItem(CACHE_PREFIX + owner, JSON.stringify(previous)); }
         catch { window.mindsparkStore.replace(null); throw new Error("This device cannot safely switch accounts because its storage is full. Export the current progress before trying again."); }
