@@ -53,7 +53,7 @@ export async function authenticate(request, env) {
   const authorization = request.headers.get("Authorization") || "";
   const match = /^Bearer ([A-Za-z0-9._~-]+)$/.exec(authorization);
   if (!match) return { error: "Sign in to sync your progress.", status: 401 };
-  if (!env.MINDSPARK_APP_ORIGIN || !env.CLERK_ISSUER || !env.CLERK_JWKS_URL || !env.DB) {
+  if (!env.MINDSPARK_APP_ORIGIN || !env.CLERK_ISSUER || !env.CLERK_JWKS_URL || !(env.MINDSPARK_DB || env.DB)) {
     return { error: "Cloud sync is not configured yet. Your device copy remains available.", status: 503 };
   }
   const claims = await verifySessionToken(match[1], env);
