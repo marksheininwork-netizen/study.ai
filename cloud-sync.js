@@ -42,25 +42,29 @@
   async function getAuth() {
     if (clerk) return clerk;
     if (!configured) throw new Error("Accounts are not configured yet. Guest mode remains available.");
-    if (!clerkPromise) clerkPromise = new Promise((resolve, reject) => {
+    if (!clerkPromise) clerkPromise = (async () => {
       const frontendApi = clerkFrontendApi();
-      if (!frontendApi || !/^[a-zA-Z0-9.-]+$/.test(frontendApi)) return reject(new Error("Account sign-in configuration is invalid."));
-      const script = document.createElement("script");
-      script.src = "https://" + frontendApi + "/npm/@clerk/clerk-js@6/dist/clerk.browser.js";
-      script.async = true;
-      script.crossOrigin = "anonymous";
-      script.dataset.clerkPublishableKey = config.clerkPublishableKey;
-      script.onload = async () => {
-        try {
-          if (!window.Clerk) throw new Error("Secure sign-in could not be loaded.");
-          clerk = window.Clerk;
-          await clerk.load({ publishableKey: config.clerkPublishableKey });
-          resolve(clerk);
-        } catch (error) { reject(error); }
-      };
-      script.onerror = () => reject(new Error("Secure sign-in could not be loaded. Guest mode still works."));
-      document.head.appendChild(script);
-    });
+      if (!frontendApi || !/^[a-zA-Z0-9.-]+$/.test(frontendApi)) throw new Error("Account sign-in configuration is invalid.");
+      const loadScript = (src, publishableKey = false) => new Promise((resolve, reject) => {
+        const script = document.createElement("script");
+        script.src = src;
+        script.async = true;
+        script.crossOrigin = "anonymous";
+        if (publishableKey) script.dataset.clerkPublishableKey = config.clerkPublishableKey;
+        script.onload = resolve;
+        script.onerror = () => reject(new Error("Secure sign-in could not be loaded. Guest mode still works."));
+        document.head.appendChild(script);
+      });
+      // Clerk's current JS SDK separates the prebuilt auth components into @clerk/ui.
+      // Load it first, as required by Clerk's vanilla JavaScript quickstart.
+      if (!window.__internal_ClerkUICtor) await loadScript("https://" + frontendApi + "/npm/@clerk/ui@1/dist/ui.browser.js");
+      if (!window.__internal_ClerkUICtor) throw new Error("Secure sign-in components could not be loaded. Guest mode still works.");
+      if (!window.Clerk) await loadScript("https://" + frontendApi + "/npm/@clerk/clerk-js@6/dist/clerk.browser.js", true);
+      if (!window.Clerk) throw new Error("Secure sign-in could not be loaded. Guest mode still works.");
+      clerk = window.Clerk;
+      await clerk.load({ publishableKey: config.clerkPublishableKey, ui: { ClerkUI: window.__internal_ClerkUICtor } });
+      return clerk;
+    })();
     return clerkPromise;
   }
 
