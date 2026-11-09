@@ -92,6 +92,7 @@ for (const viewport of [{ name: 'desktop', width: 1365, height: 900 }, { name: '
   const downloadWait = page.waitForEvent('download');
   await page.getByRole('button', { name: 'Export backup' }).click();
   const download = await downloadWait;
+  await page.getByRole('link', { name: 'Download MindSpark progress backup' }).waitFor();
   const backupPath = `/tmp/mindspark-${viewport.name}-${Date.now()}.json`;
   await download.saveAs(backupPath);
   const backup = await readFile(backupPath);
@@ -158,38 +159,49 @@ for (const viewport of [{ name: 'desktop', width: 1365, height: 900 }, { name: '
   console.log(`${viewport.name}: navigation, persistence, quizzes, flashcards, math, writing, games, timer, migration, and backups passed`);
 }
 
-// Exercise one-time-code auth, guest migration and account isolation with an RLS-like backend double.
+// Exercise age-gated Clerk login, guest migration, account switching and per-account progress isolation.
 const accountContext = await browser.newContext({ viewport: { width: 1280, height: 900 } });
+const browserRecords = {};
 await accountContext.addInitScript(() => {
-  const records = window.__mindsparkRecords = {};
-  let current = null; let pending = null;
-  const users = { 'a@example.test': { id: 'user-a', email: 'a@example.test' }, 'b@example.test': { id: 'user-b', email: 'b@example.test' } };
-  const client = {
-    auth: {
-      async getSession() { return { data: { session: current ? { user: current } : null }, error: null }; },
-      async signInWithOtp({ email }) { pending = email; return { error: null }; },
-      async verifyOtp() { current = users[pending]; return { data: { user: current }, error: null }; },
-      async signOut() { current = null; return { error: null }; }
-    },
-    from(table) {
-      if (table !== 'mindspark_progress') throw Error('Unexpected table');
-      let uid, expectedUpdatedAt, update;
-      const query = {
-        select() { return this; },
-        eq(field, value) { if (field === 'user_id') uid = value; if (field === 'updated_at') expectedUpdatedAt = value; return this; },
-        async maybeSingle() { if (!current || current.id !== uid) return { data: null, error: { message: 'RLS denied' } }; return { data: records[uid] || null, error: null }; },
-        async insert(record) { if (!current || current.id !== record.user_id) return { error: { message: 'RLS denied' } }; if (records[record.user_id]) return { error: { code: '23505', message: 'duplicate' } }; records[record.user_id] = record; return { error: null }; },
-        update(record) { update = record; return this; },
-        async selectUpdated() { return null; },
-        async then() { return this; }
-      };
-      query.select = function (fields) { if (update) return { maybeSingle: async () => { if (!current || current.id !== uid) return { data: null, error: { message: 'RLS denied' } }; const row = records[uid]; if (!row || row.updated_at !== expectedUpdatedAt) return { data: null, error: null }; Object.assign(row, update); return { data: { updated_at: row.updated_at }, error: null }; } }; return this; };
-      return query;
-    }
+  let current = null;
+  const listeners = [];
+  const users = {
+    a: { id: 'user-a' },
+    b: { id: 'user-b' }
   };
-  window.__MINDSPARK_TEST_SUPABASE_CLIENT__ = client;
+  const notify = () => listeners.forEach(listener => listener({ user: current }));
+  const auth = {
+    get user() { return current; },
+    session: { async getToken() { return current ? 'test-session-' + current.id : null; } },
+    addListener(listener) { listeners.push(listener); },
+    mountSignIn(element) {
+      element.innerHTML = '<button type="button" id="testUserA">Test account A</button><button type="button" id="testUserB">Test account B</button>';
+      element.querySelector('#testUserA').addEventListener('click', () => { current = users.a; notify(); });
+      element.querySelector('#testUserB').addEventListener('click', () => { current = users.b; notify(); });
+    },
+    async signOut() { current = null; notify(); }
+  };
+  window.__MINDSPARK_TEST_AUTH__ = auth;
 });
 const account = await accountContext.newPage();
+await account.route('**/api/progress', async route => {
+  const request = route.request();
+  const auth = request.headers()['authorization'] || '';
+  const match = /^Bearer test-session-(user-[ab])$/.exec(auth);
+  if (!match) return route.fulfill({ status: 401, contentType: 'application/json', body: JSON.stringify({ error: 'Sign in required' }) });
+  const userId = match[1];
+  if (request.method() === 'GET') return route.fulfill({ contentType: 'application/json', body: JSON.stringify({ record: browserRecords[userId] || null }) });
+  if (request.method() === 'DELETE') { delete browserRecords[userId]; return route.fulfill({ contentType: 'application/json', body: JSON.stringify({ deleted: true }) }); }
+  const input = JSON.parse(request.postData() || '{}');
+  if (request.method() !== 'PUT') return route.fulfill({ status: 405, contentType: 'application/json', body: JSON.stringify({ error: 'Method not allowed' }) });
+  const current = browserRecords[userId] || null;
+  if ((!current && input.baseVersion !== 0) || (current && current.version !== input.baseVersion)) {
+    return route.fulfill({ status: 409, contentType: 'application/json', body: JSON.stringify({ conflict: true, record: current }) });
+  }
+  const version = (current?.version || 0) + 1;
+  browserRecords[userId] = { payload: input.payload, version, updatedAt: new Date().toISOString() };
+  return route.fulfill({ status: current ? 200 : 201, contentType: 'application/json', body: JSON.stringify({ record: browserRecords[userId] }) });
+});
 await account.goto(base);
 await clickNav(account, 'study');
 await account.getByLabel('Task', { exact: true }).fill('Private progress for account A');
@@ -197,27 +209,25 @@ await account.getByRole('button', { name: 'Add to my plan' }).click();
 await account.getByRole('button', { name: 'Optional account' }).click();
 await account.addScriptTag({ content: axeSource });
 await auditAccessibility(account, 'account dialog');
-await account.getByLabel('Email address').fill('a@example.test');
-await account.getByRole('button', { name: 'Email me a sign-in code' }).click();
-await account.getByLabel('Six-digit sign-in code').fill('123456');
-await account.getByRole('button', { name: 'Verify and sync' }).click();
+await account.getByRole('button', { name: 'Continue with secure sign-in' }).click();
+await account.getByText(/Cloud accounts are currently for people age 16 or older/).waitFor();
+await account.getByRole('checkbox', { name: /at least 16 years old/ }).check();
+await account.getByRole('button', { name: 'Continue with secure sign-in' }).click();
+await account.getByRole('button', { name: 'Test account A' }).click();
 await account.getByText('Progress synced securely to your account.').waitFor();
-assert.equal(await account.evaluate(() => window.__mindsparkRecords['user-a'].payload.tasks[0].title), 'Private progress for account A');
+assert.equal(browserRecords['user-a'].payload.tasks[0].title, 'Private progress for account A', 'guest data migrates into account A');
 await account.getByRole('button', { name: 'Sign out' }).click();
-await account.getByLabel('Email address').fill('b@example.test');
-await account.getByRole('button', { name: 'Email me a sign-in code' }).click();
-await account.getByLabel('Six-digit sign-in code').fill('654321');
-await account.getByRole('button', { name: 'Verify and sync' }).click();
+await account.getByText('Guest learner').waitFor();
+await account.getByRole('button', { name: 'Continue with secure sign-in' }).click();
+await account.getByRole('button', { name: 'Test account B' }).click();
 await account.getByText('Progress synced securely to your account.').waitFor();
-assert.equal(await account.evaluate(() => window.__mindsparkRecords['user-b'].payload.tasks.length), 0, 'account B must not receive A private progress');
+assert.equal(browserRecords['user-b'].payload.tasks.length, 0, 'account B must not receive A private progress');
 await account.getByRole('button', { name: 'Sign out' }).click();
-await account.getByLabel('Email address').fill('a@example.test');
-await account.getByRole('button', { name: 'Email me a sign-in code' }).click();
-await account.getByLabel('Six-digit sign-in code').fill('123456');
-await account.getByRole('button', { name: 'Verify and sync' }).click();
+await account.getByRole('button', { name: 'Continue with secure sign-in' }).click();
+await account.getByRole('button', { name: 'Test account A' }).click();
 await account.getByText('Progress synced securely to your account.').waitFor();
-assert.equal(await account.evaluate(() => window.mindsparkStore.read().tasks.some(x => x.title === 'Private progress for account A')), true, 'switching back restores account A local state');
-assert.deepEqual(await account.evaluate(() => Object.keys(window.__mindsparkRecords).sort()), ['user-a', 'user-b']);
+assert.equal(await account.evaluate(() => window.mindsparkStore.read().tasks.some(x => x.title === 'Private progress for account A')), true, 'switching back restores only account A local state');
+assert.deepEqual(Object.keys(browserRecords).sort(), ['user-a', 'user-b']);
 await accountContext.close();
 
 assert.deepEqual(failures, [], `browser console errors: ${failures.join('; ')}`);
