@@ -285,6 +285,7 @@ await account.getByRole('button', { name: 'Continue with secure sign-in' }).clic
 await account.getByRole('button', { name: 'Test account A' }).click();
 await account.getByText('Progress synced securely to your account.').waitFor();
 assert.equal(browserRecords['user-a'].payload.tasks[0].title, 'Private progress for account A', 'guest data migrates into account A');
+await account.getByRole('button', { name: 'Close account dialog' }).click();
 // Simulate a transient server error during an ordinary local save, then recover without losing the device copy.
 failNextProgressWrite = true;
 await account.getByLabel('Task', { exact: true }).fill('Retry after a sync outage');
@@ -296,6 +297,7 @@ assert.equal(await account.evaluate(() => window.mindsparkStore.read().tasks.som
 await account.evaluate(() => window.mindsparkAccount.sync());
 await account.getByText('Progress synced securely to your account.').waitFor();
 assert.ok(browserRecords['user-a'].payload.tasks.some(task => task.title === 'Retry after a sync outage'), 'retry after recovery syncs the preserved local edit');
+await account.getByRole('button', { name: 'Optional account' }).click();
 await account.getByRole('button', { name: 'Sign out' }).click();
 await account.getByText('Guest learner').waitFor();
 await account.getByRole('button', { name: 'Continue with secure sign-in' }).click();
