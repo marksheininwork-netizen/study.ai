@@ -148,6 +148,11 @@ for (const viewport of [{ name: 'desktop', width: 1365, height: 900 }, { name: '
     await restore.waitForFunction(() => document.querySelector('#importStatus')?.textContent.startsWith('Import failed:'));
     assert.deepEqual(await restore.evaluate(() => window.mindsparkStore.read()), snapshot, `${name} preserves all existing progress`);
   }
+  const atLimit = { ...snapshot, tasks: Array.from({ length: 1000 }, (_, index) => ({ id: `limit-${index}`, title: `Task ${index}`, done: false })) };
+  await restore.evaluate(value => window.mindsparkStore.replace(value), atLimit);
+  await restore.locator('#importFile').setInputFiles({ name: 'over-limit-partial.json', mimeType: 'application/json', buffer: Buffer.from(JSON.stringify({ product:'MindSpark Learning',version:1,data:{ tasks:[{ id:'overflow-task',title:'Must not be dropped' }] } })) });
+  await restore.waitForFunction(() => document.querySelector('#importStatus')?.textContent.includes('1,000-item limit'));
+  assert.deepEqual(await restore.evaluate(() => window.mindsparkStore.read()), atLimit, 'imports exceeding the supported list size are rejected without truncating existing or incoming records');
 
   // Legacy Study AI flashcards and recall totals survive migration.
   const migrationContext = await browser.newContext({ viewport: { width: viewport.width, height: viewport.height } });

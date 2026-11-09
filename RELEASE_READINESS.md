@@ -55,7 +55,7 @@ Supabase project creation remains blocked by the account's free project quota. N
 
 - A completed staging export was downloaded in Chrome as `mindspark-learning-backup.json` (2,666 bytes). Its QA dataset contained 2 cards, 1 task, 3 quiz records, 1 academy record, 3 math records, 0 focus sessions, game best 1, essay check count 1, and card review stats 1/1.
 - Backup version 1 and legacy version 0 are supported. A valid partial backup merges only the fields it contains: list records append by unique ID, repeated imports are idempotent, counters take the greater value, and omitted fields remain unchanged. Conflicting records with an existing ID keep the current local record.
-- Malformed JSON, duplicate IDs within one backup, unsupported future versions/fields, and invalid partial fields are rejected before mutation; browser checks assert the full pre-import state remains unchanged.
+- Malformed JSON, duplicate IDs within one backup, unsupported future versions/fields, invalid partial fields, and merges exceeding the 1,000-record list limit are rejected before mutation; browser checks assert the full pre-import state remains unchanged.
 - The expanded Playwright suite exercises these cases in guest contexts. The latest CI evidence is recorded below after completion.
 
 ### Device, CI, and accessibility

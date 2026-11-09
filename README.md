@@ -19,7 +19,7 @@ Serve the repository root with any static HTTP server and open `index.html`. Gue
 
 ## Progress, privacy, and backup
 
-Tasks, cards, scores, writing-review counts, and focus sessions save in browser storage. Data stays on that device unless the learner exports a backup or configures an account. Supported backup imports merge only included fields, de-duplicate records by ID, and keep the greater cumulative counters. Malformed, duplicate-ID, unsupported-version, or invalid-field backups are rejected before changing progress. Store a JSON backup before changing browsers or clearing data.
+Tasks, cards, scores, writing-review counts, and focus sessions save in browser storage. Data stays on that device unless the learner exports a backup or configures an account. Supported backup imports merge only included fields, de-duplicate records by ID, and keep the greater cumulative counters. Each list is limited to 1,000 records. Malformed, duplicate-ID, over-limit, unsupported-version, or invalid-field backups are rejected before changing progress. Store a JSON backup before changing browsers or clearing data.
 
 Signed-in account deletion requires a server-only Clerk development secret (`CLERK_SECRET_KEY`) in the staging Pages preview environment. The endpoint authenticates the current subject, replaces synced progress with a minimal deletion tombstone, revokes active sessions, and asks Clerk to delete that identity. A provider failure leaves sync blocked and returns a retryable partial-completion message. The current browser's account cache is cleared after success; other devices can retain local cached progress until the learner clears it there.
 

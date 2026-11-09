@@ -162,6 +162,9 @@ response = await onRequestDeleteAccount({ request: await makeRequest("DELETE", "
 assert.equal(response.status, 503);
 assert.equal(rows.has("user_a"), true, "missing server credential preserves cloud progress");
 assert.equal(clerkDeletedUsers.length, providerCallCount, "missing server credential never calls Clerk");
+response = await onRequestDeleteAccount({ request: await makeRequest("DELETE", "user_a", undefined, {}, "/api/account"), env: { ...env, CLERK_SECRET_KEY: "sk_live_never-allowed" } });
+assert.equal(response.status, 503, "production Clerk credentials are refused by this staging-only account-deletion route");
+assert.equal(rows.has("user_a"), true, "a production key cannot cause deletion through the staging route");
 
 response = await onRequestDeleteAccount({ request: await makeRequest("DELETE", "user_a", undefined, { origin: "https://attacker.example" }, "/api/account"), env });
 assert.equal(response.status, 403, "cross-origin account deletion is denied");
