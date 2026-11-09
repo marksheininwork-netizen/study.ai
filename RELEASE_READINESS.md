@@ -152,3 +152,18 @@ Completed evidence: axe WCAG 2.0/2.1/2.2 A/AA scans passed for all eight product
 3. Independent legal/privacy review and manual VoiceOver/assistive-technology review, including status/error announcements.
 
 PR #2 remains draft and unmerged. Production deployment and live billing are disabled. MathifyX and the public Study AI site were not changed.
+
+## Latest continuation — backup read failure coverage (2026-11-09)
+
+- Added a browser regression for a backup file whose asynchronous read rejects before parsing. It verifies the user receives an import error and every preexisting progress field remains byte-for-byte equivalent at the application-state level.
+- GitHub Actions [run 68](https://github.com/marksheininwork-netizen/study.ai/actions/runs/42708148958) passed on commit `b7785bbcc6f021f41f16367faa72ab1205549cc0`. The completed `verify` job ran the full `npm test` suite, including backup round-trip, import validation and failure atomicity, D1/JWT security tests, desktop/mobile Playwright flows, and axe checks.
+- Cloudflare preview deployment `d3b2183e-a487-4518-99fd-713b40923aed` completed successfully for that commit with the dedicated `MINDSPARK_DB` preview binding. A new hash deployment origin opened as a fresh guest profile and showed all eight products. Its settings still omit `CLERK_SECRET_KEY`.
+- Automated Playwright file uploads use `setInputFiles()` in CI and verify exact restore into a new browser context. The Codex in-app browser did not expose a native file chooser for a second real-preview upload attempt, so this attempt is not counted as a deployed import pass. Do not describe the in-app-browser attempt as native picker verification.
+- No live Clerk account deletion was performed. The deletion endpoint and mocked provider tests remain covered; a real disposable-identity exercise requires the owner to set the development-only secret in Pages Preview settings. Production configuration was not changed.
+
+### Remaining explicit gates
+
+- [ ] Owner finishes the staging-only Clerk development secret setup, then complete the disposable test identity deletion/revocation check.
+- [ ] Complete physical iPhone Safari/Chrome and VoiceOver testing with an authorized device.
+- [ ] Obtain independent privacy/legal review; no compliance conclusion is made.
+
