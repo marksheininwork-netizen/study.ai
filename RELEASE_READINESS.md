@@ -49,10 +49,58 @@ The Cloudflare Pages project `mindspark-learning-staging` is connected to the PR
 
 Supabase project creation remains blocked by the account's free project quota. No existing Supabase or D1 project was deleted, repurposed, or migrated. See current [Cloudflare D1 limits](https://developers.cloudflare.com/d1/platform/limits/), [Workers limits](https://developers.cloudflare.com/workers/platform/limits/), [Clerk development environments](https://clerk.com/docs/guides/development/managing-environments), and [Clerk JavaScript quickstart](https://clerk.com/docs/js-frontend/getting-started/quickstart).
 
+## Final release-readiness verification
+
+### Backups
+
+- A completed staging export was downloaded in Chrome as `mindspark-learning-backup.json` (2,666 bytes). Its QA dataset contained 2 cards, 1 task, 3 quiz records, 1 academy record, 3 math records, 0 focus sessions, game best 1, essay check count 1, and card review stats 1/1.
+- The deployed import was previously exercised in a non-empty account context; that did not prove clean-profile restoration. A separate empty guest workspace was confirmed with 0 cards, tasks, activities, and focus minutes. The Codex in-app browser did not open/expose the operating-system file picker after activating Import backup, so import into that empty workspace and exact full-data comparison remain unverified.
+- CI's browser suite exports to a separate empty Playwright browser context, imports, and checks the card and review count. It also verifies malformed JSON shows an error and preserves the existing card. It does not assert exact restoration of tasks/all activity/progress and does not cover duplicate or partial backups.
+- **Release blocker:** verify exact full-dataset restore into a truly fresh guest browser profile; test malformed, duplicate, and partial backups for no data loss.
+
+### Device, CI, and accessibility
+
+- No authorized physical iPhone session was available. Do not treat the 390×844 viewport run or Chrome Incognito as physical iPhone/Safari verification.
+- GitHub Actions [run 49](https://github.com/marksheininwork-netizen/study.ai/actions/runs/42558849776) passed on latest functional commit `748f46d6a309f538e154ba441bbc5b1e26e670e0`. Its `npm test` job completed browser, product, D1/JWT security-contract, and accessibility checks. Subsequent branch commits changed readiness documentation only; the latest documentation deployment is active at the stable preview alias above.
+- Prior deployed browser checks covered the eight products at desktop and 390×844 mobile sizes; automated axe WCAG A/AA scans passed. Manual keyboard checks on staging confirmed the account dialog opened with focus on Close, Tab reached dialog actions, Escape closed the dialog and returned focus to its opener, and proceeding without the 16+ affirmation displayed an age-gate message. Full focus trapping and screen-reader announcements were not established.
+
+## Independent privacy and legal review checklist
+
+This checklist is for independent counsel/privacy review, not a compliance conclusion. Review the current [Clerk Standard Terms](https://clerk.com/legal/standard-terms), [Clerk Privacy Policy](https://clerk.com/legal/privacy), and [FTC COPPA FAQ](https://www.ftc.gov/business-guidance/resources/complying-coppa-frequently-asked-questions) against the actual deployment and jurisdictions.
+
+- [ ] Confirm current Clerk plan/terms permit the intended educational/student audience and all end-user processing. Clerk's Standard Terms state that under-16 end-user personal information requires evidence of verifiable parental consent. The product currently gates cloud accounts to self-attested age 16+; determine how to treat 16–17-year-olds, age misrepresentation, and jurisdictions with other age/consent rules.
+- [ ] Determine whether any guest-mode local data, device identifiers, or technical logs create personal-data obligations; document purpose, minimization, retention, deletion, and access controls for each field and provider.
+- [ ] Review D1 data categories and retention: subject ID, progress JSON (including tasks, cards, and learning activity), version, timestamps. Confirm no email or essay draft is stored, no unnecessary student fields are collected, and operational logs/backups do not reintroduce identifiers.
+- [ ] Confirm the student-facing notice accurately names MindSpark, Clerk, Cloudflare, the data collected, cross-device sync, local guest storage, retention/deletion, contact method, rights, and any analytics/cookies. A full standalone notice and user terms were not independently verified in this PR.
+- [ ] Review account/progress deletion behavior. The current `Delete cloud progress` endpoint removes the signed-in user's D1 progress row; it does not delete the Clerk identity. Decide, document, and implement an appropriate account deletion path and verify deletion/retention across Clerk, D1, and backups before launch.
+- [ ] Confirm guardian consent, notice, parental access/deletion rights, age assurance, data transfer/residency, vendor DPAs, incident response, and retention periods as applicable. Do not enable under-16 accounts until the required consent and legal review are complete.
+- [ ] Record an independent reviewer’s decision and date; no legal compliance determination is made here.
+
+## Assistive-technology test checklist
+
+Completed evidence: automated axe WCAG 2.0/2.1/2.2 A/AA scans passed for all eight product views and the account dialog; keyboard interaction confirmed account-dialog initial focus, Escape dismissal/focus return, and age-gate status text.
+
+- [ ] VoiceOver on macOS and iOS: landmarks/headings, product navigation labels, form labels, quiz correctness/explanations, timer state, save/sync/backup status announcements, and error announcements.
+- [ ] Keyboard only: logical order through desktop and mobile navigation, visible focus, skip-to-content behavior, dialog focus containment/wrap, Escape/close behavior, and focus restoration.
+- [ ] Dialogs and Clerk-hosted sign-in: announce dialog title/description, enter/exit correctly, age gate reachable, OTP fields/errors announced, and focus restored after close or failure.
+- [ ] Forms and errors: required fields, invalid/oversized/malformed/partial/duplicate imports, persistence failures, and sync conflicts associate messages with fields and announce them without losing entered data.
+- [ ] Zoom/reflow, contrast, reduced motion, touch target size, orientation, and screen-reader/browser combinations on a real iPhone and desktop.
+- [ ] Record assistive technology, OS/browser version, results, and issues. A manual VoiceOver/assistive-technology audit remains outstanding.
+
+## Production launch checklist
+
+- [ ] Close all backup restore/data-integrity blockers and pass the full suite on the final functional commit and the deployed preview.
+- [ ] Complete physical iPhone Safari/Chrome authentication, persistence, sign-out, and sync tests when an authorized device is available.
+- [ ] Complete independent legal/privacy review and decide/implement account deletion, notices, retention, consent, and age controls.
+- [ ] Complete VoiceOver and keyboard/focus/error-announcement checks and resolve critical findings.
+- [ ] Reconfirm preview-only Clerk and D1 configuration, environment separation, and current free-tier/vendor terms.
+- [ ] Obtain explicit approval before any production deployment, PR merge, or live billing change.
+
 ## Remaining blockers
 
-1. Verify backup restoration into a clean guest profile and account sign-in/sync in a physical iPhone browser; desktop and isolated-browser sync passed.
-2. Obtain independent student privacy/legal review, including jurisdiction-specific guardian-consent requirements for any future under-16 accounts; complete a screen-reader/assistive-technology audit.
-3. Before launch, review current vendor limits and verify staging-specific auth/domain configuration again. Production deployment remains an explicit approval step.
+1. Fresh guest-profile restore with exact comparison of cards, tasks, activity, and progress; malformed preservation is covered in CI, but duplicate and partial backup behavior is not.
+2. Authorized physical iPhone Safari/Chrome auth and sync verification.
+3. Independent legal/privacy review plus a user account deletion path; the current feature only deletes cloud progress.
+4. Manual VoiceOver/assistive-technology review, including focus trapping and status/error announcements.
 
-PR #2 remains draft and unmerged. No production deployment, live billing, MathifyX change, or public Study AI change was made.
+PR #2 remains draft and unmerged. Production deployment and live billing are disabled. MathifyX and the public Study AI site were not changed.
