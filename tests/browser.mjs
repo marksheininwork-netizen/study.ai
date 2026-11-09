@@ -312,7 +312,7 @@ assert.equal(await account.evaluate(() => document.activeElement.id), 'accountOp
 await account.getByRole('button', { name: 'Optional account' }).click();
 await account.getByRole('button', { name: 'Continue with secure sign-in' }).click();
 await account.getByText(/Cloud accounts require a self-attestation that you are at least 16/).waitFor();
-await account.getByRole('checkbox', { name: /affirm that you are at least 16 years old/ }).check();
+await account.getByRole('checkbox', { name: /affirm that I am at least 16 years old/ }).check();
 await account.evaluate(() => { window.__MINDSPARK_TEST_AUTH__.failNextMount = true; });
 await account.getByRole('button', { name: 'Continue with secure sign-in' }).click();
 await account.getByText('Simulated Clerk sign-in component load failure').waitFor();
