@@ -1,114 +1,245 @@
-/* Optional Supabase account sync. Guest mode never loads the SDK or contacts a server. */
+/* Optional Clerk email-code sign-in with owner-scoped Cloudflare D1 sync. Guest mode stays local. */
 (() => {
   "use strict";
   const config = window.MINDSPARK_CONFIG || {};
   const dialog = document.getElementById("accountDialog");
   const status = document.getElementById("accountStatus");
-  const emailForm = document.getElementById("accountEmailForm");
-  const codeForm = document.getElementById("accountCodeForm");
-  const signOut = document.getElementById("accountSignOut");
-  const resend = document.getElementById("accountResend");
-  let client = window.__MINDSPARK_TEST_SUPABASE_CLIENT__ || null;
-  let user = null;
-  let timer = null;
-  let syncing = false;
-  let configured = Boolean(config.url && config.publishableKey) || Boolean(client);
+  const signInPanel = document.getElementById("accountSignInPanel");
+  const signInButton = document.getElementById("accountStartSignIn");
+  const clerkMount = document.getElementById("clerkSignIn");
+  const ageConfirm = document.getElementById("accountAgeConfirm");
+  const signOutButton = document.getElementById("accountSignOut");
+  const deleteCloudButton = document.getElementById("accountDeleteCloud");
+  const testAuth = window.__MINDSPARK_TEST_AUTH__ || null;
   const OWNER_KEY = "mindspark-sync-owner";
   const CACHE_PREFIX = "mindspark-account-cache:";
+  let clerk = testAuth;
+  let clerkPromise = null;
+  let user = null;
+  let remoteVersion = 0;
+  let timer = null;
+  let syncing = false;
+  let mounted = false;
+  let activeOwner = null;
+
   const setStatus = (message) => { if (status) status.textContent = message; };
-  const setSignedIn = (nextUser) => {
-    user = nextUser || null;
-    document.getElementById("accountLabel").textContent = user ? (user.email || "Account synced") : "Guest learner";
-    emailForm?.classList.toggle("hidden", Boolean(user));
-    codeForm?.classList.add("hidden");
-    signOut?.classList.toggle("hidden", !user);
-    if (user) setStatus("Signed in. Your progress syncs when you are online.");
-  };
-  async function getClient() {
-    if (client) return client;
-    if (!configured) throw new Error("Accounts are not configured for this preview yet. Guest mode remains available.");
-    const { createClient } = await import("https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.119.0/+esm");
-    client = createClient(config.url, config.publishableKey, { auth: { persistSession: true, autoRefreshToken: true, detectSessionInUrl: true } });
-    return client;
+  const configured = Boolean(config.clerkPublishableKey && config.clerkPublishableKey.startsWith("pk_")) || Boolean(testAuth);
+  if (signInButton) signInButton.disabled = !configured;
+  if (signInPanel) signInPanel.classList.toggle("hidden", !configured);
+  if (document.getElementById("accountConfigMessage")) {
+    document.getElementById("accountConfigMessage").textContent = configured
+      ? "Secure email-code accounts are optional. Cloud sync stores only your learning progress; your email stays with the identity provider."
+      : "Account sync is not configured for this staging preview. Guest mode stays free and saves on this device.";
   }
+
+  function clerkFrontendApi() {
+    try {
+      const value = atob(config.clerkPublishableKey.split("_")[2] || "");
+      return value.replace(/\$$/, "");
+    } catch { return ""; }
+  }
+
+  async function getAuth() {
+    if (clerk) return clerk;
+    if (!configured) throw new Error("Accounts are not configured yet. Guest mode remains available.");
+    if (!clerkPromise) clerkPromise = new Promise((resolve, reject) => {
+      const frontendApi = clerkFrontendApi();
+      if (!frontendApi || !/^[a-zA-Z0-9.-]+$/.test(frontendApi)) return reject(new Error("Account sign-in configuration is invalid."));
+      const script = document.createElement("script");
+      script.src = "https://" + frontendApi + "/npm/@clerk/clerk-js@6/dist/clerk.browser.js";
+      script.async = true;
+      script.crossOrigin = "anonymous";
+      script.dataset.clerkPublishableKey = config.clerkPublishableKey;
+      script.onload = async () => {
+        try {
+          if (!window.Clerk) throw new Error("Secure sign-in could not be loaded.");
+          clerk = window.Clerk;
+          await clerk.load({ publishableKey: config.clerkPublishableKey });
+          resolve(clerk);
+        } catch (error) { reject(error); }
+      };
+      script.onerror = () => reject(new Error("Secure sign-in could not be loaded. Guest mode still works."));
+      document.head.appendChild(script);
+    });
+    return clerkPromise;
+  }
+
+  function snapshotCache(owner = user?.id) {
+    if (!owner || !window.mindsparkStore) return;
+    try {
+      localStorage.setItem(CACHE_PREFIX + owner, JSON.stringify({ data: window.mindsparkStore.read(), version: remoteVersion }));
+    } catch {
+      throw new Error("This browser cannot safely switch accounts because its storage is full. Export a backup before continuing.");
+    }
+  }
+
+  function switchLocalOwner(nextOwner) {
+    const previousOwner = localStorage.getItem(OWNER_KEY);
+    if (previousOwner === nextOwner) {
+      activeOwner = nextOwner;
+      return;
+    }
+    if (previousOwner) snapshotCache(previousOwner);
+    if (previousOwner) {
+      let cached = null;
+      try { cached = JSON.parse(localStorage.getItem(CACHE_PREFIX + nextOwner) || "null"); }
+      catch { cached = null; }
+      window.mindsparkStore.replace(cached?.data || null);
+      remoteVersion = Number.isSafeInteger(cached?.version) ? cached.version : 0;
+    } else {
+      // No owner means the current device data is guest progress. Keep it for safe first-login migration.
+      remoteVersion = 0;
+    }
+    localStorage.setItem(OWNER_KEY, nextOwner);
+    activeOwner = nextOwner;
+  }
+
+  function showSignedIn(nextUser) {
+    if (!nextUser?.id) return;
+    const changed = user?.id !== nextUser.id;
+    user = { id: nextUser.id };
+    document.querySelector(".avatar").textContent = "A";
+    document.getElementById("accountLabel").textContent = "Account synced";
+    signInPanel?.classList.add("hidden");
+    signOutButton?.classList.remove("hidden");
+    deleteCloudButton?.classList.remove("hidden");
+    if (changed) {
+      try { switchLocalOwner(user.id); }
+      catch (error) { setStatus(error.message); return; }
+      syncProgress();
+    }
+  }
+
+  function showGuest(message) {
+    if (user?.id && activeOwner === user.id) {
+      try { snapshotCache(user.id); } catch (error) { setStatus(error.message); }
+      try { window.mindsparkStore.replace(null); } catch {}
+      try { localStorage.removeItem(OWNER_KEY); } catch {}
+    }
+    user = null;
+    activeOwner = null;
+    remoteVersion = 0;
+    document.querySelector(".avatar").textContent = "G";
+    document.getElementById("accountLabel").textContent = "Guest learner";
+    signInPanel?.classList.toggle("hidden", !configured);
+    signOutButton?.classList.add("hidden");
+    deleteCloudButton?.classList.add("hidden");
+    if (message) setStatus(message);
+  }
+
+  async function requestProgress(method, payload) {
+    const auth = await getAuth();
+    const token = await auth.session?.getToken();
+    if (!token) throw new Error("Your sign-in expired. Sign in again to sync.");
+    const response = await fetch("/api/progress", {
+      method,
+      credentials: "same-origin",
+      cache: "no-store",
+      headers: {
+        Authorization: "Bearer " + token,
+        ...(method === "GET" ? {} : { "Content-Type": "application/json" })
+      },
+      ...(method === "GET" ? {} : { body: JSON.stringify(payload) })
+    });
+    let body;
+    try { body = await response.json(); } catch { body = {}; }
+    return { response, body };
+  }
+
   async function syncProgress() {
-    if (!user || syncing) return;
+    if (!user || syncing || !navigator.onLine) return;
     syncing = true;
     try {
-      const api = await getClient();
-      // Optimistic concurrency: if another device updates at the same time, reload and merge again.
-      // Guest state is merged before every write, so account creation never replaces local progress.
-      const owner = localStorage.getItem(OWNER_KEY);
-      if (owner && owner !== user.id) {
-        const previous = owner ? window.mindsparkStore.read() : null;
-        try { if (owner) localStorage.setItem(CACHE_PREFIX + owner, JSON.stringify(previous)); }
-        catch { window.mindsparkStore.replace(null); throw new Error("This device cannot safely switch accounts because its storage is full. Export the current progress before trying again."); }
-        const cached = localStorage.getItem(CACHE_PREFIX + user.id);
-        window.mindsparkStore.replace(cached ? JSON.parse(cached) : null);
+      const loaded = await requestProgress("GET");
+      if (!loaded.response.ok) throw new Error(loaded.body.error || "Could not load account progress.");
+      let record = loaded.body.record;
+      if (record?.payload) {
+        const currentOwner = localStorage.getItem(OWNER_KEY);
+        if (currentOwner !== user.id) switchLocalOwner(user.id);
+        window.mindsparkStore.merge(record.payload);
+        remoteVersion = record.version;
       }
       for (let attempt = 0; attempt < 5; attempt++) {
-        const { data: row, error: readError } = await api.from("mindspark_progress").select("payload,updated_at").eq("user_id", user.id).maybeSingle();
-        if (readError) throw readError;
-        const merged = row?.payload ? window.mindsparkStore.merge(row.payload) : window.mindsparkStore.read();
-        const updatedAt = new Date().toISOString();
-        if (!row) {
-          const { error } = await api.from("mindspark_progress").insert({ user_id: user.id, payload: merged, updated_at: updatedAt });
-          if (!error) { localStorage.setItem(OWNER_KEY, user.id); localStorage.removeItem(CACHE_PREFIX + user.id); setStatus("Progress synced securely to your account."); return; }
-          if (error.code === "23505") continue; // another device created the first row
-          throw error;
+        const payload = window.mindsparkStore.read();
+        const saved = await requestProgress("PUT", { payload, baseVersion: remoteVersion });
+        if (saved.response.ok) {
+          remoteVersion = saved.body.record.version;
+          localStorage.setItem(OWNER_KEY, user.id);
+          snapshotCache(user.id);
+          setStatus("Progress synced securely to your account.");
+          return;
         }
-        const { data: saved, error } = await api.from("mindspark_progress").update({ payload: merged, updated_at: updatedAt }).eq("user_id", user.id).eq("updated_at", row.updated_at).select("updated_at").maybeSingle();
-        if (error) throw error;
-        if (saved) { localStorage.setItem(OWNER_KEY, user.id); localStorage.removeItem(CACHE_PREFIX + user.id); setStatus("Progress synced securely to your account."); return; }
+        if (saved.response.status !== 409 || !saved.body.record) throw new Error(saved.body.error || "Could not sync progress.");
+        record = saved.body.record;
+        window.mindsparkStore.merge(record.payload);
+        remoteVersion = record.version;
       }
       throw new Error("Another device is syncing right now. Your local progress is safe; reconnect to retry.");
     } catch (error) {
       setStatus("Sync paused: " + (error?.message || "connection unavailable") + ". Your browser copy is still saved.");
     } finally { syncing = false; }
   }
+
+  async function initializeAuth() {
+    if (!configured) return;
+    try {
+      const auth = await getAuth();
+      if (auth.addListener) auth.addListener((state) => {
+        const nextUser = state?.user || auth.user;
+        if (nextUser?.id) showSignedIn(nextUser);
+        else if (user) showGuest("Signed out. Guest progress is still saved on this device.");
+      });
+      if (auth.user?.id) showSignedIn(auth.user);
+    } catch (error) {
+      setStatus(error?.message || "Secure account sign-in is unavailable. Guest mode remains available.");
+    }
+  }
+
   document.getElementById("accountOpen")?.addEventListener("click", () => dialog?.showModal());
-  emailForm?.classList.toggle("hidden", !configured);
-  document.getElementById("accountConfigMessage").textContent = configured ? "Sign in with a one-time email code. Your guest progress will be combined with account progress." : "Cloud sync is not configured for this preview. Guest mode works fully on this device.";
-  emailForm?.addEventListener("submit", async (event) => {
-    event.preventDefault();
-    setStatus("Sending a sign-in code…");
+  signInButton?.addEventListener("click", async () => {
+    if (!ageConfirm?.checked) {
+      setStatus("Cloud accounts are currently for people age 16 or older. Under 16, use free guest mode.");
+      return;
+    }
+    setStatus("Loading secure sign-in…");
     try {
-      const api = await getClient();
-      const email = document.getElementById("accountEmail").value.trim();
-      const { error } = await api.auth.signInWithOtp({ email, options: { shouldCreateUser: true } });
-      if (error) throw error;
-      emailForm.classList.add("hidden"); codeForm?.classList.remove("hidden");
-      setStatus("Check your inbox for a one-time code. Your guest progress is unchanged.");
-    } catch (error) { setStatus(error?.message || "Could not send a code. Check the address and try again."); }
+      const auth = await getAuth();
+      if (!mounted) {
+        clerkMount?.classList.remove("hidden");
+        auth.mountSignIn(clerkMount, { routing: "hash", signUpForceRedirectUrl: location.origin + "/", signInForceRedirectUrl: location.origin + "/" });
+        mounted = true;
+      }
+      setStatus("Use the secure email-code sign-in form below. Your email is not stored in MindSpark.");
+    } catch (error) { setStatus(error?.message || "Could not start secure sign-in."); }
   });
-  codeForm?.addEventListener("submit", async (event) => {
-    event.preventDefault();
-    setStatus("Verifying your code…");
+
+  signOutButton?.addEventListener("click", async () => {
+    if (!user) return;
     try {
-      const api = await getClient();
-      const email = document.getElementById("accountEmail").value.trim();
-      const token = document.getElementById("accountCode").value.trim();
-      const { data, error } = await api.auth.verifyOtp({ email, token, type: "email" });
-      if (error) throw error;
-      setSignedIn(data.user);
-      await syncProgress();
-    } catch (error) { setStatus(error?.message || "That code could not be verified. Request a new code and try again."); }
+      snapshotCache(user.id);
+      const auth = await getAuth();
+      await auth.signOut();
+      showGuest("Signed out. This device's account copy is kept in its private local cache.");
+    } catch (error) { setStatus(error?.message || "Could not sign out. Your local copy is still saved."); }
   });
-  resend?.addEventListener("click", async () => {
-    setStatus("Sending a new sign-in code…");
-    try { const api = await getClient(); const { error } = await api.auth.signInWithOtp({ email: document.getElementById("accountEmail").value.trim(), options: { shouldCreateUser: true } }); if (error) throw error; setStatus("A new code was sent. Use the newest message in your inbox."); }
-    catch (error) { setStatus(error?.message || "Could not send a new code. Try again shortly."); }
+
+  deleteCloudButton?.addEventListener("click", async () => {
+    if (!user || !window.confirm("Delete this account's cloud-synced MindSpark progress? Your local backup on this device will remain.")) return;
+    try {
+      const result = await requestProgress("DELETE");
+      if (!result.response.ok) throw new Error(result.body.error || "Cloud progress could not be deleted.");
+      remoteVersion = 0;
+      localStorage.removeItem(CACHE_PREFIX + user.id);
+      setStatus("Cloud progress deleted. Your current device copy remains available.");
+    } catch (error) { setStatus(error?.message || "Cloud progress could not be deleted."); }
   });
-  signOut?.addEventListener("click", async () => {
-    try { const api = await getClient(); const { error } = await api.auth.signOut(); if (error) throw error; setSignedIn(null); setStatus("Signed out. This browser's guest progress is still here."); }
-    catch (error) { setStatus(error?.message || "Could not sign out right now."); }
-  });
+
   window.addEventListener("mindspark:local-save", () => {
     if (!user || syncing) return;
     clearTimeout(timer);
     timer = setTimeout(syncProgress, 1200);
   });
   window.addEventListener("online", () => { if (user) syncProgress(); });
-  if (configured) getClient().then((api) => api.auth.getSession()).then(({ data, error }) => { if (error) throw error; if (data.session?.user) { setSignedIn(data.session.user); syncProgress(); } }).catch(() => setStatus("Could not restore your account session. Guest progress remains available."));
-  window.mindsparkAccount = { signIn: (email) => client.auth.signInWithOtp({ email, options: { shouldCreateUser: true } }), verify: async (email, token) => { const result = await client.auth.verifyOtp({ email, token, type: "email" }); if (result.data?.user) { setSignedIn(result.data.user); await syncProgress(); } return result; }, sync: syncProgress };
+  initializeAuth();
+  window.mindsparkAccount = { signIn: () => signInButton?.click(), sync: syncProgress, signOut: () => signOutButton?.click() };
 })();
