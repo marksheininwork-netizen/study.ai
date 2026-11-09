@@ -72,6 +72,33 @@ Supabase project creation remains blocked by the account's free project quota. N
 - Earlier GitHub Actions [run 52](https://github.com/marksheininwork-netizen/study.ai/actions/runs/42622366716) passed on prior PR head `e3b1c458e5fd54e974843e6d3e8d0311727779b4`. The latest CI result for this continuation will be recorded after completion.
 - Prior deployed browser checks covered the eight products at desktop and 390×844 mobile sizes; automated axe WCAG A/AA scans passed. The expanded browser suite checks dialog focus containment from its first control and focus restoration after Escape. Full VoiceOver remains outstanding.
 
+## Current continuation evidence — 2026-11-09
+
+- PR head is `5f88e425aecc42f69ece4849019d6da07717a56f` on `codex/mindspark-learning-workspace`; PR #2 remains open, draft, and unmerged.
+- GitHub Actions [run 58](https://github.com/marksheininwork-netizen/study.ai/actions/runs/42679369127) passed the D1 deletion authorization/session-revocation/idempotency tests. After correcting the new browser test setup and making sync errors visible outside the modal, [run 63](https://github.com/marksheininwork-netizen/study.ai/actions/runs/42686156124) passed the complete `npm test` workflow, including Playwright desktop/mobile and axe. Intermediate runs 59–62 exposed test setup and styling issues; those were fixed before run 63.
+- Cloudflare Pages preview deployment `17b71c71-32e5-44bb-9a65-6b63f8069db7` succeeded for the current functional head and carries the `MINDSPARK_DB` staging binding. Stable preview: https://codex-mindspark-learning-wor.mindspark-learning-staging.pages.dev/ . Preview variables include the Clerk issuer, JWKS URL, and allowed origin; `CLERK_SECRET_KEY` is absent. Production branch remains `main`; this is preview only.
+- Automated checks cover all eight product routes at 1365×900 and 390×844, axe WCAG A/AA scans, mobile overflow, representative product interactions and persistence, complete/partial backup restore, malformed/duplicate/unsupported backup rejection, dialog keyboard containment, account-switch isolation, and guest-to-account migration. A new browser regression simulates a sync-write outage, verifies the device copy remains intact, confirms the error status is visible after the dialog closes, and retries successfully. This is Playwright simulation, not a real provider outage.
+- D1/JWT tests mock Clerk and cover anonymous deletion denial, account-subject scoping, active-session revocation, repeat deletion after Clerk returns already deleted, and safe retry after session-revocation or identity-deletion failures. No real Clerk identity deletion was performed.
+- No physical iPhone/Safari/Chrome session or manual VoiceOver review was performed.
+
+### Safe staging account-deletion exercise (once the owner configures the secret)
+
+1. In Cloudflare Pages **preview settings only**, set `CLERK_SECRET_KEY` to the MindSpark Clerk **development** `sk_test_` secret; never put it in browser code, GitHub files, a URL, or chat. Confirm production settings remain unchanged and trigger a preview redeploy.
+2. Create a disposable QA identity through the staging app, affirm the existing 16+ gate, and add only a unique synthetic task marker. Confirm sync succeeds. Use the authorized staging D1 read-only path to verify the subject row and marker before deletion; do not copy tokens or personal data into logs.
+3. Open account deletion and cancel the native confirmation. Confirm the identity remains signed in and the D1 marker remains.
+4. Repeat, type `DELETE`, and confirm. Verify the app reports completion and returns to guest mode; the browser owner key and signed-in cache are cleared. Confirm D1 contains only the deletion tombstone for that random subject, the old session cannot read or write progress (410), and the identity/session no longer exists through Clerk's development console/API.
+5. Record only pass/fail, deployment ID, timestamp, and redacted evidence. Do not test with a real learner account. If provider deletion partially fails, keep the tombstone, use the page's retry while the authorized session token remains valid, and verify completion before removing the test marker or changing settings.
+
+This exercise has not run. The missing staging-only development secret is the blocker; automated mocks do not substitute for a live deletion test.
+
+### Remaining human release checklist
+
+- [ ] Authorized tester completes the physical iPhone Safari and Chrome steps below, including sign-in, sign-out, guest persistence, cross-device sync, and recovery from an offline period.
+- [ ] Tester completes the VoiceOver checks below on iPhone and desktop and records OS/browser/assistive-technology versions.
+- [ ] Owner configures the staging-only development secret and completes the disposable identity exercise above.
+- [ ] Independent privacy/legal reviewer approves age assurance, student notices/terms, consent/guardian duties, data retention/deletion, and vendor terms. Automated checks do not establish legal compliance.
+- [ ] Only after those gates, obtain explicit approval for any production deployment, PR merge, or billing change.
+
 ## Independent privacy and legal review checklist
 
 This checklist is for independent counsel/privacy review, not a compliance conclusion. Review the current [Clerk Standard Terms](https://clerk.com/legal/standard-terms), [Clerk Privacy Policy](https://clerk.com/legal/privacy), and [FTC COPPA FAQ](https://www.ftc.gov/business-guidance/resources/complying-coppa-frequently-asked-questions) against the actual deployment and jurisdictions.
@@ -100,7 +127,7 @@ A simulator or responsive desktop viewport does not count as a physical-device p
 
 ## Assistive-technology test checklist
 
-Completed evidence: axe WCAG 2.0/2.1/2.2 A/AA scans passed for all eight product views and the account dialog in CI run 56. Automated and staging keyboard checks confirmed initial focus, backward and forward focus wrapping, Escape dismissal/focus return, and age-gate status text. Manual screen-reader checks remain open.
+Completed evidence: axe WCAG 2.0/2.1/2.2 A/AA scans passed for all eight product views and the account dialog in CI run 63. Automated and staging keyboard checks confirmed initial focus, backward and forward focus wrapping, Escape dismissal/focus return, visible sync/error status, and age-gate status text. Manual screen-reader checks remain open.
 
 - [ ] VoiceOver on macOS and iOS: landmarks/headings, product navigation labels, form labels, quiz correctness/explanations, timer state, save/sync/backup status announcements, and error announcements.
 - [ ] Keyboard only: logical order through desktop and mobile navigation, visible focus, skip-to-content behavior, dialog focus containment/wrap, Escape/close behavior, and focus restoration.
@@ -111,7 +138,7 @@ Completed evidence: axe WCAG 2.0/2.1/2.2 A/AA scans passed for all eight product
 
 ## Production launch checklist
 
-- [x] Close backup restore/data-integrity blockers and pass the full suite on the final functional commit and deployed staging preview — GitHub Actions run 56 and the deployment/browser smoke evidence above.
+- [x] Close backup restore/data-integrity blockers and pass the full suite on the current functional commit and deployed staging preview — GitHub Actions run 63 and the deployment evidence above.
 - [ ] Complete physical iPhone Safari/Chrome authentication, persistence, sign-out, and sync tests when an authorized device is available.
 - [ ] Complete independent legal/privacy review and verify deletion retention, notices, consent, and age controls.
 - [ ] Complete VoiceOver and keyboard/focus/error-announcement checks and resolve critical findings.
