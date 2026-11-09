@@ -167,3 +167,5 @@ PR #2 remains draft and unmerged. Production deployment and live billing are dis
 - [ ] Complete physical iPhone Safari/Chrome and VoiceOver testing with an authorized device.
 - [ ] Obtain independent privacy/legal review; no compliance conclusion is made.
 
+- Final documentation head `db0b83b7a6bc4620105bfb167de3653bc7d8f23a` passed GitHub Actions [run 69](https://github.com/marksheininwork-netizen/study.ai/actions/runs/42708722326). The complete `npm test` job succeeded. Cloudflare Pages deployment `b835d80f-6872-49d8-8d18-4e873a2cc29e` succeeded for that same head and serves the stable preview alias above with the dedicated D1 binding. `CLERK_SECRET_KEY` remains absent from the preview environment.
+
