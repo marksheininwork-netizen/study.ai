@@ -224,12 +224,14 @@ await accountContext.addInitScript(() => {
     session: { async getToken() { return current ? 'test-session-' + current.id : null; } },
     addListener(listener) { listeners.push(listener); },
     mountSignIn(element) {
+      if (auth.failNextMount) { auth.failNextMount = false; throw new Error('Simulated Clerk sign-in component load failure'); }
       element.innerHTML = '<button type="button" id="testUserA">Test account A</button><button type="button" id="testUserB">Test account B</button>';
       element.querySelector('#testUserA').addEventListener('click', () => { current = users.a; notify(); });
       element.querySelector('#testUserB').addEventListener('click', () => { current = users.b; notify(); });
     },
     async signOut() { current = null; notify(); }
   };
+  auth.failNextMount = false;
   window.__MINDSPARK_TEST_AUTH__ = auth;
 });
 const account = await accountContext.newPage();
@@ -281,6 +283,10 @@ await account.getByRole('button', { name: 'Optional account' }).click();
 await account.getByRole('button', { name: 'Continue with secure sign-in' }).click();
 await account.getByText(/Cloud accounts are currently for people age 16 or older/).waitFor();
 await account.getByRole('checkbox', { name: /at least 16 years old/ }).check();
+await account.evaluate(() => { window.__MINDSPARK_TEST_AUTH__.failNextMount = true; });
+await account.getByRole('button', { name: 'Continue with secure sign-in' }).click();
+await account.getByText('Simulated Clerk sign-in component load failure').waitFor();
+assert.equal(await account.evaluate(() => window.__MINDSPARK_TEST_AUTH__.user), null, 'a failed sign-in component load keeps guest mode and does not create a user');
 await account.getByRole('button', { name: 'Continue with secure sign-in' }).click();
 await account.getByRole('button', { name: 'Test account A' }).click();
 await account.getByText('Progress synced securely to your account.').waitFor();
