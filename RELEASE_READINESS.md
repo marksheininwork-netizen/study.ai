@@ -51,6 +51,14 @@ Supabase project creation remains blocked by the account's free project quota. N
 
 ## Final release-readiness verification
 
+### Continuation evidence — 2026-11-09
+
+- GitHub Actions [run 56](https://github.com/marksheininwork-netizen/study.ai/actions/runs/42677351414) passed on PR head `905b99237829d2f22c4365a798f00073e895c449`. Its final `npm test` step completed successfully: structural and JavaScript checks, sync contracts, D1/JWT authorization, and the full Playwright desktop/mobile and axe regression suite.
+- The browser suite now restores every exported field into an empty guest context and compares the full state exactly. It also verifies valid version 0/version 1 imports, repeat-import idempotence, safe partial merges, invalid/malformed/duplicate/future-version/over-limit rejection with exact state preservation, account deletion confirmation/cancel, session/data cleanup behavior, and focus trapping.
+- Latest Cloudflare Pages preview deployment `d738a2b4-2d82-44b7-8af7-9d7e043cfe51` completed successfully for the PR head. Preview URL: https://codex-mindspark-learning-wor.mindspark-learning-staging.pages.dev/ . A read-only browser smoke pass opened all eight product routes, confirmed the empty guest state, checked Shift+Tab and Tab focus wrapping inside the account dialog, and confirmed Escape returns focus to its opener.
+- Staging account deletion itself remains unverified because the connected preview environment has no `CLERK_SECRET_KEY`. Function-level tests mock Clerk's Backend API and verify same-subject session revocation and identity deletion, D1 tombstone behavior, stale-token rejection, partial-failure messaging/retry, and refusal to use a live `sk_live_` key. No Clerk identity was deleted during testing.
+- No authorized physical iPhone or VoiceOver session was available; the checklist below remains for an authorized tester.
+
 ### Backups
 
 - A completed staging export was downloaded in Chrome as `mindspark-learning-backup.json` (2,666 bytes). Its QA dataset contained 2 cards, 1 task, 3 quiz records, 1 academy record, 3 math records, 0 focus sessions, game best 1, essay check count 1, and card review stats 1/1.
@@ -92,7 +100,7 @@ A simulator or responsive desktop viewport does not count as a physical-device p
 
 ## Assistive-technology test checklist
 
-Completed evidence: automated axe WCAG 2.0/2.1/2.2 A/AA scans passed for all eight product views and the account dialog; keyboard interaction confirmed account-dialog initial focus, Escape dismissal/focus return, and age-gate status text.
+Completed evidence: axe WCAG 2.0/2.1/2.2 A/AA scans passed for all eight product views and the account dialog in CI run 56. Automated and staging keyboard checks confirmed initial focus, backward and forward focus wrapping, Escape dismissal/focus return, and age-gate status text. Manual screen-reader checks remain open.
 
 - [ ] VoiceOver on macOS and iOS: landmarks/headings, product navigation labels, form labels, quiz correctness/explanations, timer state, save/sync/backup status announcements, and error announcements.
 - [ ] Keyboard only: logical order through desktop and mobile navigation, visible focus, skip-to-content behavior, dialog focus containment/wrap, Escape/close behavior, and focus restoration.
@@ -103,7 +111,7 @@ Completed evidence: automated axe WCAG 2.0/2.1/2.2 A/AA scans passed for all eig
 
 ## Production launch checklist
 
-- [ ] Close all backup restore/data-integrity blockers and pass the full suite on the final functional commit and the deployed preview.
+- [x] Close backup restore/data-integrity blockers and pass the full suite on the final functional commit and deployed staging preview — GitHub Actions run 56 and the deployment/browser smoke evidence above.
 - [ ] Complete physical iPhone Safari/Chrome authentication, persistence, sign-out, and sync tests when an authorized device is available.
 - [ ] Complete independent legal/privacy review and verify deletion retention, notices, consent, and age controls.
 - [ ] Complete VoiceOver and keyboard/focus/error-announcement checks and resolve critical findings.
@@ -112,9 +120,8 @@ Completed evidence: automated axe WCAG 2.0/2.1/2.2 A/AA scans passed for all eig
 
 ## Remaining blockers
 
-1. Latest CI and staging preview results for the new restore/import and deletion implementation.
-2. Authorized physical iPhone Safari/Chrome auth and sync verification.
-3. Add the Clerk development secret only to the staging Pages preview environment, then verify identity, active-session revocation, and D1 tombstone with a disposable QA identity. The connected staging project currently lists no `CLERK_SECRET_KEY`.
-4. Independent legal/privacy review and manual VoiceOver/assistive-technology review, including status/error announcements.
+1. Authorized physical iPhone Safari/Chrome sign-in, sign-out, sync, and persistence verification.
+2. Add the Clerk development secret only to the staging Pages preview environment, then verify identity, active-session revocation, and D1 tombstone with a disposable QA identity. The connected staging project currently lists no `CLERK_SECRET_KEY`.
+3. Independent legal/privacy review and manual VoiceOver/assistive-technology review, including status/error announcements.
 
 PR #2 remains draft and unmerged. Production deployment and live billing are disabled. MathifyX and the public Study AI site were not changed.
