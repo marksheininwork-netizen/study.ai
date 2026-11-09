@@ -52,7 +52,10 @@ for (const viewport of [{ name: 'desktop', width: 1365, height: 900 }, { name: '
     if (id === 'home') await page.getByText('Your completed quizzes, challenges, and games will appear here.', { exact: true }).waitFor();
     if (id === 'study') await page.getByText('Your study plan is empty. Add one task to get started.', { exact: true }).waitFor();
     if (id === 'quiz') await page.locator('.question').waitFor();
-    if (id === 'cards') await page.getByText('Add your first card to practice. Your next question will appear here.', { exact: true }).waitFor();
+    if (id === 'cards') {
+      await page.getByText('Add your first card to practice.', { exact: true }).waitFor();
+      await page.getByText('Your next question will appear here.', { exact: true }).waitFor();
+    }
     if (id === 'math') await page.locator('.question').waitFor();
     if (id === 'essay') {
       assert.equal(await page.locator('#essayText').inputValue(), '', 'EssayCoach starts with a blank, local-only draft');
