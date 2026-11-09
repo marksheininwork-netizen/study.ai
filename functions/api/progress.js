@@ -38,6 +38,7 @@ export async function onRequestGet({ request, env }) {
   if (!requiredConfig(env)) return json({ error: "Cloud sync is not configured yet. Guest mode still works on this device." }, 503);
   const auth = await authenticate(request, env);
   if (auth.error) return json({ error: auth.error }, auth.status);
+  if (auth.deleted) return json({ error: "This account has been deleted. Sign out and continue as a guest." }, 410);
   try { return json({ record: await rowFor(env, auth.userId) }); }
   catch { return json({ error: "Could not load saved progress. Your device copy remains safe." }, 503); }
 }
@@ -48,6 +49,7 @@ export async function onRequestPut({ request, env }) {
   if (!(request.headers.get("Content-Type") || "").toLowerCase().startsWith("application/json")) return json({ error: "A JSON progress backup is required." }, 415);
   const auth = await authenticate(request, env);
   if (auth.error) return json({ error: auth.error }, auth.status);
+  if (auth.deleted) return json({ error: "This account has been deleted. Sign out and continue as a guest." }, 410);
   const declaredLength = Number(request.headers.get("Content-Length") || 0);
   if (declaredLength > MAX_BYTES) return json({ error: "This progress record is too large to sync. Export a backup to keep it safe." }, 413);
   let input;
@@ -79,6 +81,7 @@ export async function onRequestDelete({ request, env }) {
   if (!sameOrigin(request, env)) return json({ error: "This request could not be verified." }, 403);
   const auth = await authenticate(request, env);
   if (auth.error) return json({ error: auth.error }, auth.status);
+  if (auth.deleted) return json({ error: "This account has been deleted. Sign out and continue as a guest." }, 410);
   try {
     await database(env).prepare("DELETE FROM mindspark_progress WHERE user_id = ?").bind(auth.userId).run();
     return json({ deleted: true });

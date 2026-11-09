@@ -131,11 +131,11 @@
     if (message) setStatus(message);
   }
 
-  async function requestProgress(method, payload) {
+  async function requestProgress(method, payload, path = "/api/progress") {
     const auth = await getAuth();
     const token = await auth.session?.getToken();
     if (!token) throw new Error("Your sign-in expired. Sign in again to sync.");
-    const response = await fetch("/api/progress", {
+    const response = await fetch(path, {
       method,
       credentials: "same-origin",
       cache: "no-store",
@@ -228,14 +228,22 @@
   });
 
   deleteCloudButton?.addEventListener("click", async () => {
-    if (!user || !window.confirm("Delete this account's cloud-synced MindSpark progress? Your local backup on this device will remain.")) return;
+    if (!user || window.prompt("This permanently deletes your MindSpark cloud progress and Clerk sign-in identity. This browser's account cache will also be cleared. Other devices may retain local cached copies until cleared there. Type DELETE to confirm.") !== "DELETE") return;
+    const deletingUser = user;
+    setStatus("Deleting account and cloud progress…");
     try {
-      const result = await requestProgress("DELETE");
-      if (!result.response.ok) throw new Error(result.body.error || "Cloud progress could not be deleted.");
+      const result = await requestProgress("DELETE", undefined, "/api/account");
+      if (!result.response.ok) throw new Error(result.body.error || "Account deletion could not be completed.");
+      const auth = await getAuth();
+      user = null;
+      activeOwner = null;
       remoteVersion = 0;
-      localStorage.removeItem(CACHE_PREFIX + user.id);
-      setStatus("Cloud progress deleted. Your current device copy remains available.");
-    } catch (error) { setStatus(error?.message || "Cloud progress could not be deleted."); }
+      try { await auth.signOut(); } catch { /* Clerk has already deleted the identity and revoked its sessions. */ }
+      localStorage.removeItem(CACHE_PREFIX + deletingUser.id);
+      localStorage.removeItem(OWNER_KEY);
+      window.mindsparkStore.replace(null);
+      showGuest("Your account and cloud progress were deleted. You are signed out; guest mode is ready.");
+    } catch (error) { setStatus(error?.message || "Account deletion could not be completed."); }
   });
 
   window.addEventListener("mindspark:local-save", () => {

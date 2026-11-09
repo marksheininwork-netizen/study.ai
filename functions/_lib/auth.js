@@ -58,7 +58,11 @@ export async function authenticate(request, env) {
   }
   const claims = await verifySessionToken(match[1], env);
   if (!claims) return { error: "Your sign-in expired. Sign in again to sync.", status: 401 };
-  return { userId: claims.sub };
+  try {
+    const row = await (env.MINDSPARK_DB || env.DB).prepare("SELECT payload FROM mindspark_progress WHERE user_id = ?").bind(claims.sub).first();
+    if (row?.payload && JSON.parse(row.payload).__mindsparkDeletedAccount === true) return { userId: claims.sub, deleted: true };
+  } catch { return { error: "Account status could not be checked. Try again later.", status: 503 }; }
+  return { userId: claims.sub, deleted: false };
 }
 
 export function clearAuthKeyCacheForTests() {

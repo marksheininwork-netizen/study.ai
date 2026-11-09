@@ -39,13 +39,13 @@ Using two separate Clerk development test identities through the deployed stagin
 ## Backup verification
 
 - The deployed preview's export control created the named `mindspark-learning-backup.json` Blob download. Chrome showed the downloaded JSON as complete (2,666 bytes).
-- The downloaded file was selected in FlashcardLab's restore control in the same QA account context. Restore completed without an error and retained the two saved cards. The target already contained the same progress, so restoration into a clean guest profile remains to be verified. Automated CI separately covers backup JSON import/merge behavior.
+- The downloaded file was selected in FlashcardLab's restore control in the same QA account context. That earlier same-account restore did not prove clean-profile recovery. The updated browser suite exports a fixture containing every supported field, imports it into a fresh guest context, and compares the complete state exactly.
 
 ## Staging and infrastructure
 
 HTTPS preview: https://codex-mindspark-learning-wor.mindspark-learning-staging.pages.dev/
 
-The Cloudflare Pages project `mindspark-learning-staging` is connected to the PR branch, and the stable preview alias above is served by the latest successful branch deployment. Production deployments are disabled; production has no D1 binding or Clerk environment variables. The existing public Study AI site was not changed.
+The Cloudflare Pages project `mindspark-learning-staging` is connected to the PR branch, and the stable preview alias above is served by the latest successful branch deployment. Its current preview variable names include the Clerk issuer/JWKS URL and allowed origin, but not `CLERK_SECRET_KEY`; account deletion therefore returns a safe 503 until the owner adds a Clerk development secret privately. Production deployments are disabled; production has no D1 binding or Clerk environment variables. The existing public Study AI site was not changed.
 
 Supabase project creation remains blocked by the account's free project quota. No existing Supabase or D1 project was deleted, repurposed, or migrated. See current [Cloudflare D1 limits](https://developers.cloudflare.com/d1/platform/limits/), [Workers limits](https://developers.cloudflare.com/workers/platform/limits/), [Clerk development environments](https://clerk.com/docs/guides/development/managing-environments), and [Clerk JavaScript quickstart](https://clerk.com/docs/js-frontend/getting-started/quickstart).
 
@@ -54,15 +54,15 @@ Supabase project creation remains blocked by the account's free project quota. N
 ### Backups
 
 - A completed staging export was downloaded in Chrome as `mindspark-learning-backup.json` (2,666 bytes). Its QA dataset contained 2 cards, 1 task, 3 quiz records, 1 academy record, 3 math records, 0 focus sessions, game best 1, essay check count 1, and card review stats 1/1.
-- The deployed import was previously exercised in a non-empty account context; that did not prove clean-profile restoration. A separate empty guest workspace was confirmed with 0 cards, tasks, activities, and focus minutes. The Codex in-app browser did not open/expose the operating-system file picker after activating Import backup, so import into that empty workspace and exact full-data comparison remain unverified.
-- CI's browser suite exports to a separate empty Playwright browser context, imports, and checks the card and review count. It also verifies malformed JSON shows an error and preserves the existing card. It does not assert exact restoration of tasks/all activity/progress and does not cover duplicate or partial backups.
-- **Release blocker:** verify exact full-dataset restore into a truly fresh guest browser profile; test malformed, duplicate, and partial backups for no data loss.
+- Backup version 1 and legacy version 0 are supported. A valid partial backup merges only the fields it contains: list records append by unique ID, repeated imports are idempotent, counters take the greater value, and omitted fields remain unchanged. Conflicting records with an existing ID keep the current local record.
+- Malformed JSON, duplicate IDs within one backup, unsupported future versions/fields, and invalid partial fields are rejected before mutation; browser checks assert the full pre-import state remains unchanged.
+- The expanded Playwright suite exercises these cases in guest contexts. The latest CI evidence is recorded below after completion.
 
 ### Device, CI, and accessibility
 
 - No authorized physical iPhone session was available. Do not treat the 390×844 viewport run or Chrome Incognito as physical iPhone/Safari verification.
-- GitHub Actions [run 49](https://github.com/marksheininwork-netizen/study.ai/actions/runs/42558849776) passed on latest functional commit `748f46d6a309f538e154ba441bbc5b1e26e670e0`. Its `npm test` job completed browser, product, D1/JWT security-contract, and accessibility checks. Subsequent branch commits changed readiness documentation only; the latest documentation deployment is active at the stable preview alias above.
-- Prior deployed browser checks covered the eight products at desktop and 390×844 mobile sizes; automated axe WCAG A/AA scans passed. Manual keyboard checks on staging confirmed the account dialog opened with focus on Close, Tab reached dialog actions, Escape closed the dialog and returned focus to its opener, and proceeding without the 16+ affirmation displayed an age-gate message. Full focus trapping and screen-reader announcements were not established.
+- Earlier GitHub Actions [run 52](https://github.com/marksheininwork-netizen/study.ai/actions/runs/42622366716) passed on prior PR head `e3b1c458e5fd54e974843e6d3e8d0311727779b4`. The latest CI result for this continuation will be recorded after completion.
+- Prior deployed browser checks covered the eight products at desktop and 390×844 mobile sizes; automated axe WCAG A/AA scans passed. The expanded browser suite checks dialog focus containment from its first control and focus restoration after Escape. Full VoiceOver remains outstanding.
 
 ## Independent privacy and legal review checklist
 
@@ -72,9 +72,23 @@ This checklist is for independent counsel/privacy review, not a compliance concl
 - [ ] Determine whether any guest-mode local data, device identifiers, or technical logs create personal-data obligations; document purpose, minimization, retention, deletion, and access controls for each field and provider.
 - [ ] Review D1 data categories and retention: subject ID, progress JSON (including tasks, cards, and learning activity), version, timestamps. Confirm no email or essay draft is stored, no unnecessary student fields are collected, and operational logs/backups do not reintroduce identifiers.
 - [ ] Confirm the student-facing notice accurately names MindSpark, Clerk, Cloudflare, the data collected, cross-device sync, local guest storage, retention/deletion, contact method, rights, and any analytics/cookies. A full standalone notice and user terms were not independently verified in this PR.
-- [ ] Review account/progress deletion behavior. The current `Delete cloud progress` endpoint removes the signed-in user's D1 progress row; it does not delete the Clerk identity. Decide, document, and implement an appropriate account deletion path and verify deletion/retention across Clerk, D1, and backups before launch.
+- [ ] Verify account deletion on staging after a Clerk development secret is configured. The route replaces progress with a minimal deleted-account tombstone, revokes the user's active Clerk sessions, then deletes the Clerk identity. The tombstone blocks stale JWTs from reading or recreating progress and allows a retry if provider cleanup fails. On success, the current browser cache is cleared; other devices may retain local cache until manually cleared. Verify provider backup and retention timing independently. The tombstone retains only the random Clerk subject ID to suppress stale sessions, so include that purpose and retention period in privacy review.
 - [ ] Confirm guardian consent, notice, parental access/deletion rights, age assurance, data transfer/residency, vendor DPAs, incident response, and retention periods as applicable. Do not enable under-16 accounts until the required consent and legal review are complete.
 - [ ] Record an independent reviewer’s decision and date; no legal compliance determination is made here.
+
+## Authorized physical iPhone test checklist
+
+Run only on an authorized tester's iPhone using the deployed staging preview. Record iPhone model, iOS version, Safari version, Chrome version, tester initials, date/time, and whether VoiceOver was enabled. Use disposable development test identities and no real student data.
+
+1. Open the staging URL in Safari and Chrome. Confirm HTTPS, all eight tools, responsive navigation, and no horizontal overflow.
+2. As a guest, create a task and flashcard; complete a quiz and math problem; record a focus session. Reload and close/reopen the browser. Confirm local progress persists.
+3. Sign in with an authorized Clerk development test identity and permitted email code. Confirm guest data migrates once, sync status is announced, and reload restores it.
+4. On a second authorized device/browser, sign in to the same test identity and verify synced data. Make a change on each device and confirm conflict recovery without data loss.
+5. Sign out. Confirm the account view is detached, guest mode remains available, and reloading does not silently sign the user back in. Check account switching does not expose another test identity's progress.
+6. If the development deletion secret is configured, use a disposable test identity: cancel the confirmation and verify nothing changes; then type `DELETE`, verify success/sign-out, and confirm sign-in is revoked and D1 progress is gone.
+7. Record failures with redacted screenshots and console/network details. Never capture email codes, bearer tokens, or secret values.
+
+A simulator or responsive desktop viewport does not count as a physical-device pass.
 
 ## Assistive-technology test checklist
 
@@ -91,16 +105,16 @@ Completed evidence: automated axe WCAG 2.0/2.1/2.2 A/AA scans passed for all eig
 
 - [ ] Close all backup restore/data-integrity blockers and pass the full suite on the final functional commit and the deployed preview.
 - [ ] Complete physical iPhone Safari/Chrome authentication, persistence, sign-out, and sync tests when an authorized device is available.
-- [ ] Complete independent legal/privacy review and decide/implement account deletion, notices, retention, consent, and age controls.
+- [ ] Complete independent legal/privacy review and verify deletion retention, notices, consent, and age controls.
 - [ ] Complete VoiceOver and keyboard/focus/error-announcement checks and resolve critical findings.
 - [ ] Reconfirm preview-only Clerk and D1 configuration, environment separation, and current free-tier/vendor terms.
 - [ ] Obtain explicit approval before any production deployment, PR merge, or live billing change.
 
 ## Remaining blockers
 
-1. Fresh guest-profile restore with exact comparison of cards, tasks, activity, and progress; malformed preservation is covered in CI, but duplicate and partial backup behavior is not.
+1. Latest CI and staging preview results for the new restore/import and deletion implementation.
 2. Authorized physical iPhone Safari/Chrome auth and sync verification.
-3. Independent legal/privacy review plus a user account deletion path; the current feature only deletes cloud progress.
-4. Manual VoiceOver/assistive-technology review, including focus trapping and status/error announcements.
+3. Add the Clerk development secret only to the staging Pages preview environment, then verify identity, active-session revocation, and D1 tombstone with a disposable QA identity. The connected staging project currently lists no `CLERK_SECRET_KEY`.
+4. Independent legal/privacy review and manual VoiceOver/assistive-technology review, including status/error announcements.
 
 PR #2 remains draft and unmerged. Production deployment and live billing are disabled. MathifyX and the public Study AI site were not changed.

@@ -19,7 +19,9 @@ Serve the repository root with any static HTTP server and open `index.html`. Gue
 
 ## Progress, privacy, and backup
 
-Tasks, cards, scores, writing-review counts, and focus sessions save in browser storage. Data stays on that device unless the learner exports a backup or configures an account. Import merges with the current browser records to avoid replacing existing progress. Store a JSON backup before changing browsers or clearing data.
+Tasks, cards, scores, writing-review counts, and focus sessions save in browser storage. Data stays on that device unless the learner exports a backup or configures an account. Supported backup imports merge only included fields, de-duplicate records by ID, and keep the greater cumulative counters. Malformed, duplicate-ID, unsupported-version, or invalid-field backups are rejected before changing progress. Store a JSON backup before changing browsers or clearing data.
+
+Signed-in account deletion requires a server-only Clerk development secret (`CLERK_SECRET_KEY`) in the staging Pages preview environment. The endpoint authenticates the current subject, replaces synced progress with a minimal deletion tombstone, revokes active sessions, and asks Clerk to delete that identity. A provider failure leaves sync blocked and returns a retryable partial-completion message. The current browser's account cache is cleared after success; other devices can retain local cached progress until the learner clears it there.
 
 EssayCoach runs in the browser and never sends draft text to an AI service. Avoid entering identifying or sensitive information. Account use is optional; learners under 13 should get parent or guardian approval before using email sign-in. Do not use school credentials.
 
@@ -43,4 +45,4 @@ npx playwright install chromium
 npm test
 ```
 
-The browser suite covers desktop and mobile navigation across all eight products, saved tasks, quiz and contest scoring, flashcard review, legacy migration, backup export/import and invalid-file handling, MathBattle, EssayCoach, FocusRoom completion across navigation, and mocked account migration/isolation. The SQL integration-contract test checks the RLS policy shape. A live Supabase integration run still requires an isolated development project and configured auth email flow.
+The browser suite covers desktop and mobile navigation across all eight products, saved tasks, quiz and contest scoring, flashcard review, legacy migration, exact full-field guest restore, malformed/duplicate/older/partial backup behavior, MathBattle, EssayCoach, FocusRoom completion across navigation, dialog focus containment, and mocked account migration/isolation/deletion. The SQL integration-contract test checks the RLS policy shape. A live Supabase integration run still requires an isolated development project and configured auth email flow.

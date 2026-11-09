@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
 import { webcrypto } from "node:crypto";
 import { onRequestGet, onRequestPut, onRequestDelete } from "../functions/api/progress.js";
+import { onRequestDelete as onRequestDeleteAccount } from "../functions/api/account.js";
 import { clearAuthKeyCacheForTests } from "../functions/_lib/auth.js";
 
 if (!globalThis.crypto) Object.defineProperty(globalThis, "crypto", { value: webcrypto });
@@ -18,9 +19,26 @@ jwk.kid = "test-key-1";
 jwk.use = "sig";
 jwk.alg = "RS256";
 const originalFetch = globalThis.fetch;
-globalThis.fetch = async (url) => {
-  assert.equal(String(url), jwksUrl);
-  return Response.json({ keys: [jwk] });
+let clerkDeleteStatus = 200;
+const clerkDeletedUsers = [];
+const revokedSessions = [];
+globalThis.fetch = async (url, options = {}) => {
+  if (String(url) === jwksUrl) return Response.json({ keys: [jwk] });
+  if (String(url).startsWith("https://api.clerk.com/v1/sessions?")) {
+    assert.match(options.headers.Authorization, /^Bearer sk_test_/);
+    const userId = new URL(String(url)).searchParams.get("user_id");
+    return Response.json({ data: [{ id: "sess_" + userId }], total_count: 1 });
+  }
+  if (String(url).includes("/sessions/") && String(url).endsWith("/revoke")) {
+    assert.equal(options.method, "POST");
+    revokedSessions.push(decodeURIComponent(String(url).split("/").at(-2)));
+    return new Response(null, { status: 204 });
+  }
+  assert.match(String(url), /^https:\/\/api\.clerk\.com\/v1\/users\//);
+  assert.equal(options.method, "DELETE");
+  assert.match(options.headers.Authorization, /^Bearer sk_test_/);
+  clerkDeletedUsers.push(decodeURIComponent(String(url).split("/").at(-1)));
+  return new Response(clerkDeleteStatus === 200 ? '{"deleted":true}' : '{"error":"provider failure"}', { status: clerkDeleteStatus, headers: { "Content-Type": "application/json" } });
 };
 clearAuthKeyCacheForTests();
 
@@ -65,14 +83,20 @@ const DB = {
           const [userId] = values;
           return { meta: { changes: rows.delete(userId) ? 1 : 0 } };
         }
+        if (sql.startsWith("INSERT INTO mindspark_progress")) {
+          const [userId, payload, updatedAt] = values;
+          const previous = rows.get(userId);
+          rows.set(userId, { payload, version: (previous?.version || 0) + 1, updated_at: updatedAt });
+          return { meta: { changes: 1 } };
+        }
         throw new Error("Unexpected SQL: " + sql);
       },
     };
     return statement;
   },
 };
-const env = { MINDSPARK_DB: DB, CLERK_ISSUER: issuer, CLERK_JWKS_URL: jwksUrl, MINDSPARK_APP_ORIGIN: origin };
-const makeRequest = async (method, subject, body, options = {}) => new Request(origin + "/api/progress", {
+const env = { MINDSPARK_DB: DB, CLERK_ISSUER: issuer, CLERK_JWKS_URL: jwksUrl, MINDSPARK_APP_ORIGIN: origin, CLERK_SECRET_KEY: "sk_test_server-only" };
+const makeRequest = async (method, subject, body, options = {}, path = "/api/progress") => new Request(origin + path, {
   method,
   headers: {
     ...(subject ? { Authorization: "Bearer " + await token(subject, options.claims) } : {}),
@@ -121,6 +145,38 @@ response = await onRequestDelete({ request: await makeRequest("DELETE", "user_a"
 assert.equal(response.status, 200);
 assert.equal(rows.has("user_a"), false, "a signed-in user can delete their own cloud progress");
 assert.equal(rows.has("user_b"), true, "deletion is owner-scoped");
+
+response = await onRequestDeleteAccount({ request: await makeRequest("DELETE", "user_b", undefined, {}, "/api/account"), env });
+assert.equal(response.status, 200, "account deletion accepts an authenticated, same-origin confirmation request");
+assert.deepEqual(await body(response), { deleted: true, progressDeleted: true, sessionsRevoked: true, identityDeleted: true });
+assert.equal(JSON.parse(rows.get("user_b").payload).__mindsparkDeletedAccount, true, "account deletion replaces progress with a minimum tombstone to reject stale JWTs");
+assert.deepEqual(clerkDeletedUsers, ["user_b"], "account deletion calls Clerk only for the signed subject");
+assert.deepEqual(revokedSessions, ["sess_user_b"], "account deletion explicitly revokes every active session");
+response = await onRequestGet({ request: await makeRequest("GET", "user_b"), env });
+assert.equal(response.status, 410, "stale signed JWTs cannot read progress after deletion");
+
+// A missing development secret never erases data or sends a provider request.
+await onRequestPut({ request: await makeRequest("PUT", "user_a", { payload: progressA, baseVersion: 0 }), env });
+const providerCallCount = clerkDeletedUsers.length;
+response = await onRequestDeleteAccount({ request: await makeRequest("DELETE", "user_a", undefined, {}, "/api/account"), env: { ...env, CLERK_SECRET_KEY: "" } });
+assert.equal(response.status, 503);
+assert.equal(rows.has("user_a"), true, "missing server credential preserves cloud progress");
+assert.equal(clerkDeletedUsers.length, providerCallCount, "missing server credential never calls Clerk");
+
+response = await onRequestDeleteAccount({ request: await makeRequest("DELETE", "user_a", undefined, { origin: "https://attacker.example" }, "/api/account"), env });
+assert.equal(response.status, 403, "cross-origin account deletion is denied");
+assert.equal(rows.has("user_a"), true);
+
+clerkDeleteStatus = 503;
+response = await onRequestDeleteAccount({ request: await makeRequest("DELETE", "user_a", undefined, {}, "/api/account"), env });
+assert.equal(response.status, 502, "provider failure is reported as partial completion");
+assert.equal(JSON.parse(rows.get("user_a").payload).__mindsparkDeletedAccount, true, "progress stays replaced with a tombstone even when identity deletion needs retry");
+assert.match((await body(response)).error, /Cloud progress is deleted and account sync is blocked/i);
+clerkDeleteStatus = 200;
+response = await onRequestDeleteAccount({ request: await makeRequest("DELETE", "user_a", undefined, {}, "/api/account"), env });
+assert.equal(response.status, 200, "valid deletion retries can finish provider cleanup after progress is tombstoned");
+response = await onRequestPut({ request: await makeRequest("PUT", "user_a", { payload: progressA, baseVersion: 0 }), env });
+assert.equal(response.status, 410, "stale session tokens cannot recreate a deleted user's progress");
 
 globalThis.fetch = originalFetch;
 console.log("D1 API authentication, owner isolation, CSRF, conflict handling, and deletion checks passed");

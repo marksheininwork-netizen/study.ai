@@ -79,7 +79,7 @@ for (const viewport of [{ name: 'desktop', width: 1365, height: 900 }, { name: '
   await page.locator('.feedback').waitFor();
   assert.ok(await page.evaluate(() => JSON.parse(localStorage.getItem('mindspark-learning-v1')).academyHistory.length) >= 1);
 
-  // Create, reveal, grade and persist a card; export it and restore it on a clean device.
+  // Create a representative backup and restore every exported field into a truly empty guest context.
   await clickNav(page, 'cards');
   await page.getByLabel('Question').fill('What is 6 × 7?');
   await page.getByLabel('Answer').fill('42');
@@ -88,7 +88,17 @@ for (const viewport of [{ name: 'desktop', width: 1365, height: 900 }, { name: '
   await page.getByRole('button', { name: 'Reveal answer' }).click();
   await page.getByText('42', { exact: true }).waitFor();
   await page.getByRole('button', { name: 'I knew it' }).click();
-  assert.equal(await page.evaluate(() => JSON.parse(localStorage.getItem('mindspark-learning-v1')).cards[0].reviews), 1);
+  const fullProgress = {
+    cards: [{ id: 'backup-card', q: 'What is 6 × 7?', a: '42', subject: 'Math', due: 1800000000000, interval: 3, reviews: 2, known: 1 }],
+    cardStats: { reviews: 7, known: 5 },
+    tasks: [{ id: 'backup-task', title: 'Review cells', subject: 'Biology', done: true }],
+    quizHistory: [{ id: 'backup-quiz', label: 'Biology quiz', score: '4/5', day: '2026-01-02' }],
+    academyHistory: [{ id: 'backup-academy', label: 'Logic challenge', score: '1/1', day: '2026-01-03' }],
+    mathHistory: [{ id: 'backup-math', label: 'Integer practice', score: '8/10', day: '2026-01-04' }],
+    focusSessions: [{ id: 'backup-focus', label: 'Focus session', minutes: 25, day: '2026-01-05' }],
+    gameBest: 9, essayChecks: 4, createdAt: 1767225600000
+  };
+  await page.evaluate(value => window.mindsparkStore.replace(value), fullProgress);
   const downloadWait = page.waitForEvent('download');
   await page.getByRole('button', { name: 'Export backup' }).click();
   const download = await downloadWait;
@@ -99,15 +109,45 @@ for (const viewport of [{ name: 'desktop', width: 1365, height: 900 }, { name: '
   const backupContext = await browser.newContext({ viewport: { width: viewport.width, height: viewport.height } });
   const restore = await backupContext.newPage();
   await restore.goto(base);
+  assert.deepEqual(await restore.evaluate(() => { const d = window.mindsparkStore.read(); return { cards:d.cards.length,tasks:d.tasks.length,quizHistory:d.quizHistory.length,academyHistory:d.academyHistory.length,mathHistory:d.mathHistory.length,focusSessions:d.focusSessions.length,gameBest:d.gameBest,essayChecks:d.essayChecks,cardStats:d.cardStats }; }), { cards:0,tasks:0,quizHistory:0,academyHistory:0,mathHistory:0,focusSessions:0,gameBest:0,essayChecks:0,cardStats:{reviews:0,known:0} }, 'new context starts as an empty guest workspace');
   await clickNav(restore, 'cards');
   await restore.locator('#importFile').setInputFiles({ name: 'backup.json', mimeType: 'application/json', buffer: backup });
-  await restore.getByText('What is 6 × 7?', { exact: false }).waitFor();
-  assert.equal(await restore.evaluate(() => JSON.parse(localStorage.getItem('mindspark-learning-v1')).cardStats.reviews), 1);
+  await restore.waitForFunction(() => document.querySelector('#importStatus')?.textContent.includes('merged safely'));
+  assert.deepEqual(await restore.evaluate(() => window.mindsparkStore.read()), fullProgress, 'all exported fields restore exactly into an empty guest context');
 
-  // Malformed imports give a visible error and do not erase existing data.
-  await restore.locator('#importFile').setInputFiles({ name: 'bad.json', mimeType: 'application/json', buffer: Buffer.from('{broken') });
-  await restore.getByText(/Import failed/).waitFor();
-  assert.equal(await restore.evaluate(() => JSON.parse(localStorage.getItem('mindspark-learning-v1')).cards.length), 1);
+  // Re-imports are idempotent, while valid partial backups preserve other supported progress.
+  await restore.locator('#importFile').setInputFiles({ name: 'backup-again.json', mimeType: 'application/json', buffer: backup });
+  await restore.waitForFunction(() => document.querySelector('#importStatus')?.textContent.includes('merged safely'));
+  assert.deepEqual(await restore.evaluate(() => window.mindsparkStore.read()), fullProgress, 'repeated backup does not duplicate records');
+  const partial = { product: 'MindSpark Learning', version: 1, data: { tasks: [{ id: 'partial-task', title: 'Practice fractions', subject: 'Math', done: false }], gameBest: 12 } };
+  await restore.locator('#importFile').setInputFiles({ name: 'partial.json', mimeType: 'application/json', buffer: Buffer.from(JSON.stringify(partial)) });
+  await restore.waitForFunction(() => document.querySelector('#importStatus')?.textContent.includes('merged safely'));
+  const merged = await restore.evaluate(() => window.mindsparkStore.read());
+  assert.equal(merged.tasks.length, 2, 'partial lists append unique IDs');
+  assert.equal(merged.gameBest, 12, 'partial counters keep the greater value');
+  assert.deepEqual({ ...merged, tasks: fullProgress.tasks, gameBest: fullProgress.gameBest }, fullProgress, 'omitted fields and existing progress are retained');
+
+  // Older Study AI backup version zero remains importable as a partial card backup.
+  const oldBackup = { product: 'Study AI', version: 0, data: { cards: [{ id: 'old-version-card', q: 'Legacy prompt', a: 'Legacy answer', subject: 'Science', due: 0, interval: 1, reviews: 0, known: 0 }], cardStats: { reviews: 3, known: 2 } } };
+  await restore.locator('#importFile').setInputFiles({ name: 'old-version.json', mimeType: 'application/json', buffer: Buffer.from(JSON.stringify(oldBackup)) });
+  await restore.waitForFunction(() => document.querySelector('#importStatus')?.textContent.includes('merged safely'));
+  assert.equal((await restore.evaluate(() => window.mindsparkStore.read())).cards.length, 2);
+  assert.equal((await restore.evaluate(() => window.mindsparkStore.read())).cardStats.reviews, 7, 'older stats merge monotonically');
+
+  // Malformed, duplicated, unsupported, and structurally partial imports leave existing state untouched.
+  const snapshot = await restore.evaluate(() => window.mindsparkStore.read());
+  const invalidBackups = [
+    ['malformed.json', Buffer.from('{broken')],
+    ['duplicate.json', Buffer.from(JSON.stringify({ product:'MindSpark Learning',version:1,data:{ cards:[oldBackup.data.cards[0],oldBackup.data.cards[0]] } }))],
+    ['future-version.json', Buffer.from(JSON.stringify({ product:'MindSpark Learning',version:2,data:{ tasks:[] } }))],
+    ['partial-invalid.json', Buffer.from(JSON.stringify({ product:'MindSpark Learning',version:1,data:{ tasks:'not-a-list' } }))],
+    ['unknown-field.json', Buffer.from(JSON.stringify({ product:'MindSpark Learning',version:1,data:{ tasks:[],privateNotes:'unsupported' } }))]
+  ];
+  for (const [name, buffer] of invalidBackups) {
+    await restore.locator('#importFile').setInputFiles({ name, mimeType: 'application/json', buffer });
+    await restore.waitForFunction(() => document.querySelector('#importStatus')?.textContent.startsWith('Import failed:'));
+    assert.deepEqual(await restore.evaluate(() => window.mindsparkStore.read()), snapshot, `${name} preserves all existing progress`);
+  }
 
   // Legacy Study AI flashcards and recall totals survive migration.
   const migrationContext = await browser.newContext({ viewport: { width: viewport.width, height: viewport.height } });
@@ -205,6 +245,14 @@ await account.route('**/api/progress', async route => {
   browserRecords[userId] = { payload: input.payload, version, updatedAt: new Date().toISOString() };
   return route.fulfill({ status: current ? 200 : 201, contentType: 'application/json', body: JSON.stringify({ record: browserRecords[userId] }) });
 });
+await account.route('**/api/account', async route => {
+  const request = route.request();
+  const auth = request.headers()['authorization'] || '';
+  const match = /^Bearer test-session-(user-[ab])$/.exec(auth);
+  if (!match) return route.fulfill({ status: 401, contentType: 'application/json', body: JSON.stringify({ error: 'Sign in required' }) });
+  delete browserRecords[match[1]];
+  return route.fulfill({ contentType: 'application/json', body: JSON.stringify({ deleted: true, progressDeleted: true, identityDeleted: true }) });
+});
 await account.goto(base);
 await clickNav(account, 'study');
 await account.getByLabel('Task', { exact: true }).fill('Private progress for account A');
@@ -212,6 +260,12 @@ await account.getByRole('button', { name: 'Add to my plan' }).click();
 await account.getByRole('button', { name: 'Optional account' }).click();
 await account.addScriptTag({ content: axeSource });
 await auditAccessibility(account, 'account dialog');
+assert.equal(await account.evaluate(() => document.activeElement === document.querySelector('#accountDialog button[aria-label="Close account dialog"]')), true, 'dialog moves keyboard focus inside on open');
+await account.keyboard.press('Shift+Tab');
+assert.equal(await account.locator('#accountDialog').evaluate(dialog => dialog.contains(document.activeElement)), true, 'dialog contains focus when tabbing backward from its first control');
+await account.keyboard.press('Escape');
+assert.equal(await account.evaluate(() => document.activeElement.id), 'accountOpen', 'closing dialog returns focus to opener');
+await account.getByRole('button', { name: 'Optional account' }).click();
 await account.getByRole('button', { name: 'Continue with secure sign-in' }).click();
 await account.getByText(/Cloud accounts are currently for people age 16 or older/).waitFor();
 await account.getByRole('checkbox', { name: /at least 16 years old/ }).check();
@@ -231,6 +285,18 @@ await account.getByRole('button', { name: 'Test account A' }).click();
 await account.getByText('Progress synced securely to your account.').waitFor();
 assert.equal(await account.evaluate(() => window.mindsparkStore.read().tasks.some(x => x.title === 'Private progress for account A')), true, 'switching back restores only account A local state');
 assert.deepEqual(Object.keys(browserRecords).sort(), ['user-a', 'user-b']);
+const cancelDelete = account.waitForEvent('dialog');
+await account.getByRole('button', { name: 'Delete my account and progress' }).click();
+(await cancelDelete).dismiss();
+assert.equal(browserRecords['user-a'].payload.tasks[0].title, 'Private progress for account A', 'canceling typed confirmation preserves account and progress');
+const acceptDelete = account.waitForEvent('dialog');
+await account.getByRole('button', { name: 'Delete my account and progress' }).click();
+(await acceptDelete).accept('DELETE');
+await account.getByText('Your account and cloud progress were deleted. You are signed out; guest mode is ready.').waitFor();
+assert.equal(browserRecords['user-a'], undefined, 'confirmed deletion removes the account progress row');
+assert.deepEqual(Object.keys(browserRecords), ['user-b'], 'other account progress is untouched');
+assert.equal(await account.evaluate(() => window.mindsparkStore.read().tasks.length), 0, 'deleted account data is cleared from the current browser');
+assert.equal(await account.evaluate(() => localStorage.getItem('mindspark-sync-owner')), null, 'the current browser session is detached from the deleted identity');
 await accountContext.close();
 
 assert.deepEqual(failures, [], `browser console errors: ${failures.join('; ')}`);
