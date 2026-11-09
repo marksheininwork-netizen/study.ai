@@ -268,6 +268,8 @@ await auditAccessibility(account, 'account dialog');
 assert.equal(await account.evaluate(() => document.activeElement === document.querySelector('#accountDialog button[aria-label="Close account dialog"]')), true, 'dialog moves keyboard focus inside on open');
 await account.keyboard.press('Shift+Tab');
 assert.equal(await account.locator('#accountDialog').evaluate(dialog => dialog.contains(document.activeElement)), true, 'dialog contains focus when tabbing backward from its first control');
+await account.keyboard.press('Tab');
+assert.equal(await account.locator('#accountDialog').evaluate(dialog => dialog.contains(document.activeElement)), true, 'dialog contains focus when tabbing forward from its last control');
 await account.keyboard.press('Escape');
 assert.equal(await account.evaluate(() => document.activeElement.id), 'accountOpen', 'closing dialog returns focus to opener');
 await account.getByRole('button', { name: 'Optional account' }).click();

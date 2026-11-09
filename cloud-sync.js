@@ -200,6 +200,18 @@
   }
 
   document.getElementById("accountOpen")?.addEventListener("click", () => dialog?.showModal());
+  dialog?.addEventListener("keydown", (event) => {
+    if (event.key !== "Tab") return;
+    const focusable = [...dialog.querySelectorAll('a[href],button:not([disabled]),input:not([disabled]):not([type="hidden"]),select:not([disabled]),textarea:not([disabled]),[tabindex]:not([tabindex="-1"])')]
+      .filter((element) => element.getClientRects().length && element.getAttribute("aria-hidden") !== "true");
+    if (!focusable.length) { event.preventDefault(); dialog.focus(); return; }
+    const first = focusable[0], last = focusable[focusable.length - 1];
+    if (event.shiftKey && (document.activeElement === first || !dialog.contains(document.activeElement))) {
+      event.preventDefault(); last.focus();
+    } else if (!event.shiftKey && (document.activeElement === last || !dialog.contains(document.activeElement))) {
+      event.preventDefault(); first.focus();
+    }
+  });
   signInButton?.addEventListener("click", async () => {
     if (!ageConfirm?.checked) {
       setStatus("Cloud accounts are currently for people age 16 or older. Under 16, use free guest mode.");
