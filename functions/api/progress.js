@@ -8,8 +8,9 @@ const DATA_FIELDS = [...LIST_FIELDS, "cardStats", "gameBest", "essayChecks", "cr
 function json(body, status = 200) {
   return new Response(JSON.stringify(body), { status, headers: { "Content-Type": "application/json; charset=utf-8", "Cache-Control": "no-store, private", "X-Content-Type-Options": "nosniff", "Vary": "Authorization, Origin" } });
 }
+function database(env) { return env.MINDSPARK_DB || env.DB; }
 function databaseMissing(env) {
-  return !env.DB || !env.MINDSPARK_APP_ORIGIN;
+  return !database(env) || !env.MINDSPARK_APP_ORIGIN;
 }
 function sameOrigin(request, env) {
   return request.headers.get("Origin") === env.MINDSPARK_APP_ORIGIN && new URL(request.url).origin === env.MINDSPARK_APP_ORIGIN;
@@ -25,7 +26,7 @@ function cleanPayload(value) {
   return true;
 }
 async function rowFor(env, userId) {
-  const row = await env.DB.prepare("SELECT payload, version, updated_at FROM mindspark_progress WHERE user_id = ?").bind(userId).first();
+  const row = await database(env).prepare("SELECT payload, version, updated_at FROM mindspark_progress WHERE user_id = ?").bind(userId).first();
   if (!row) return null;
   return { payload: JSON.parse(row.payload), version: row.version, updatedAt: row.updated_at };
 }
@@ -63,10 +64,10 @@ export async function onRequestPut({ request, env }) {
   const timestamp = new Date().toISOString();
   try {
     if (baseVersion === null || baseVersion === 0) {
-      const inserted = await env.DB.prepare("INSERT OR IGNORE INTO mindspark_progress (user_id, payload, version, updated_at) VALUES (?, ?, 1, ?)").bind(auth.userId, serialized, timestamp).run();
+      const inserted = await database(env).prepare("INSERT OR IGNORE INTO mindspark_progress (user_id, payload, version, updated_at) VALUES (?, ?, 1, ?)").bind(auth.userId, serialized, timestamp).run();
       if (inserted.meta?.changes === 1) return json({ record: { payload: input.payload, version: 1, updatedAt: timestamp } }, 201);
     } else {
-      const updated = await env.DB.prepare("UPDATE mindspark_progress SET payload = ?, version = version + 1, updated_at = ? WHERE user_id = ? AND version = ?").bind(serialized, timestamp, auth.userId, baseVersion).run();
+      const updated = await database(env).prepare("UPDATE mindspark_progress SET payload = ?, version = version + 1, updated_at = ? WHERE user_id = ? AND version = ?").bind(serialized, timestamp, auth.userId, baseVersion).run();
       if (updated.meta?.changes === 1) return json({ record: { payload: input.payload, version: baseVersion + 1, updatedAt: timestamp } });
     }
     return json({ error: "Progress changed on another device. Merge the latest copy and retry.", conflict: true, record: await rowFor(env, auth.userId) }, 409);
@@ -79,7 +80,7 @@ export async function onRequestDelete({ request, env }) {
   const auth = await authenticate(request, env);
   if (auth.error) return json({ error: auth.error }, auth.status);
   try {
-    await env.DB.prepare("DELETE FROM mindspark_progress WHERE user_id = ?").bind(auth.userId).run();
+    await database(env).prepare("DELETE FROM mindspark_progress WHERE user_id = ?").bind(auth.userId).run();
     return json({ deleted: true });
   } catch { return json({ error: "Cloud progress could not be deleted right now." }, 503); }
 }
