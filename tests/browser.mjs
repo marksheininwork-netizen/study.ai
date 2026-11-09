@@ -48,6 +48,21 @@ for (const viewport of [{ name: 'desktop', width: 1365, height: 900 }, { name: '
   for (const [id, heading] of products) {
     await clickNav(page, id);
     await page.getByRole('heading', { name: heading }).waitFor();
+    // Confirm each tool's first-run experience is useful and free of stale guest data.
+    if (id === 'home') await page.getByText('Your completed quizzes, challenges, and games will appear here.', { exact: true }).waitFor();
+    if (id === 'study') await page.getByText('Your study plan is empty. Add one task to get started.', { exact: true }).waitFor();
+    if (id === 'quiz') await page.locator('.question').waitFor();
+    if (id === 'cards') await page.getByText('Add your first card to practice. Your next question will appear here.', { exact: true }).waitFor();
+    if (id === 'math') await page.locator('.question').waitFor();
+    if (id === 'essay') {
+      assert.equal(await page.locator('#essayText').inputValue(), '', 'EssayCoach starts with a blank, local-only draft');
+      assert.equal(await page.locator('#essayResult').evaluate(element => element.classList.contains('hidden')), true, 'EssayCoach has no stale feedback on first use');
+    }
+    if (id === 'focus') {
+      await page.locator('#timerDisplay').waitFor();
+      assert.equal(await page.locator('#focusLength').inputValue(), '25', 'FocusRoom starts in a ready, stopped state');
+    }
+    if (id === 'academy' || id === 'games') await page.locator('.question').waitFor();
     await auditAccessibility(page, `${viewport.name} ${id}`);
   }
   if (viewport.name === 'mobile') {
