@@ -1,0 +1,12 @@
+{
+  "name": "mindspark-learning",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "test": "node tests/check.mjs && node tests/integration.mjs && node tests/d1-security.mjs && node tests/browser.mjs"
+  },
+  "devDependencies": {
+    "axe-core": "4.14.0",
+    "playwright": "1.65.0"
+  }
+}

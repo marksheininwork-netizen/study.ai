@@ -1,14 +1,39 @@
 import { readFileSync } from 'node:fs';
 import assert from 'node:assert/strict';
 import { Script } from 'node:vm';
-const html=readFileSync(new URL('../index.html',import.meta.url),'utf8');
-const script=html.match(/<script>([\s\S]*?)<\/script>/)?.[1];
-assert.ok(script,'Application script exists');
-new Script(script,{filename:'study-app.js'});
-const ids=[...html.matchAll(/\bid="([^"]+)"/g)].map(m=>m[1]);
-assert.equal(new Set(ids).size,ids.length,'No duplicate element IDs');
-for(const id of ['create','question','answer','cards','face','flip','know','retry','next','due','search','dueOnly','importButton','importFile','export','importStatus']) assert.ok(ids.includes(id),id+' exists');
-for(const id of [...script.matchAll(/el\("([^"]+)"\)/g)].map(m=>m[1])) assert.ok(ids.includes(id),'Referenced DOM element '+id+' exists');
-assert.ok(script.includes('!revealed'),'Grading requires answer reveal');
-assert.ok(script.includes('isDue'),'Due review logic exists');
-console.log('Study.ai structural and JavaScript syntax checks passed');
+
+const html = readFileSync(new URL('../index.html', import.meta.url), 'utf8');
+const script = html.split('<script>')[1]?.split('</script>')[0];
+
+assert.ok(script, 'application script exists');
+new Script(script, { filename: 'mindspark.js' });
+assert.ok(html.includes('<meta name="viewport"'), 'responsive viewport is configured');
+assert.ok(html.includes('@media(max-width:650px)'), 'mobile layout exists');
+assert.ok(html.includes('prefers-reduced-motion'), 'reduced-motion preference is supported');
+assert.ok(script.includes('document.querySelector(id)'), 'dynamic selector controls can be bound');
+
+for (const label of [
+  'Study AI', 'QuizArena', 'FlashcardLab', 'MathBattle',
+  'EssayCoach', 'FocusRoom', 'Competition Academy', 'Educational Games',
+]) assert.ok(html.includes(label), label + ' is present');
+
+for (const feature of [
+  'taskForm', 'cardForm', 'mathForm', 'gameForm', 'reviewEssay',
+  'focusSessions', 'quizHistory', 'academyHistory', 'localStorage',
+  'mindspark-learning-v1', 'exportData', 'importFile', '86400000',
+  'study-ai-cards-v1', 'study-ai-stats-v1',
+]) assert.ok(script.includes(feature), feature + ' is implemented');
+
+assert.ok(html.includes('Your text is analyzed in this browser and is not sent to an AI service'),
+  'essay feedback disclosure exists');
+assert.ok(html.includes('No account or billing required'), 'guest and billing status are clear');
+for (const forbidden of ['fetch(', 'XMLHttpRequest', 'WebSocket']) {
+  assert.ok(!script.includes(forbidden), 'student data stays local (' + forbidden + ')');
+}
+
+const ids = [...html.matchAll(new RegExp('id="([^"]+)"', 'g'))].map(match => match[1]);
+assert.equal(new Set(ids).size, ids.length, 'element IDs are unique');
+assert.ok(script.includes('a:["5 cm","6 cm","7 cm","12 cm"],correct:1'),
+  'competition geometry answer key matches the 6 cm choice');
+
+console.log('MindSpark structural and JavaScript syntax checks passed');

@@ -1,0 +1,35 @@
+import assert from "node:assert/strict";
+import { readFileSync } from "node:fs";
+
+const sql = readFileSync(new URL("../migrations/0001_mindspark_progress.sql", import.meta.url), "utf8");
+const api = readFileSync(new URL("../functions/api/progress.js", import.meta.url), "utf8");
+const auth = readFileSync(new URL("../functions/_lib/auth.js", import.meta.url), "utf8");
+const cloud = readFileSync(new URL("../cloud-sync.js", import.meta.url), "utf8");
+const config = readFileSync(new URL("../mindspark-config.js", import.meta.url), "utf8");
+
+assert.match(sql, /user_id TEXT PRIMARY KEY NOT NULL/);
+assert.match(sql, /json_valid\(payload\)/i);
+assert.match(sql, /version INTEGER NOT NULL DEFAULT 1/);
+assert.doesNotMatch(sql, /email|name|date_of_birth/i, "D1 minimizes identifiers");
+assert.match(api, /WHERE user_id = \?/i, "every D1 read is scoped to verified subject");
+assert.match(api, /WHERE user_id = \? AND version = \?/i, "updates use compare-and-swap conflict resolution");
+assert.match(api, /INSERT OR IGNORE/);
+assert.match(api, /sameOrigin/);
+assert.match(api, /Authorization/);
+assert.match(api, /MAX_BYTES/);
+assert.match(api, /onRequestDelete/);
+assert.match(auth, /RSASSA-PKCS1-v1_5/);
+assert.match(auth, /claims\.azp !== origin/);
+assert.match(auth, /claims\.iss !== issuer/);
+assert.match(auth, /claims\.exp <= seconds/);
+assert.match(auth, /claims\.sub/);
+assert.doesNotMatch(auth, /CLERK_SECRET_KEY|service_role/i, "no secret identity credential is expected by this verifier");
+assert.match(cloud, /mindspark-account-cache:/);
+assert.match(cloud, /baseVersion: remoteVersion/);
+assert.match(cloud, /status !== 409/);
+assert.match(cloud, /ageConfirm/);
+assert.match(cloud, /credentials: "same-origin"/);
+assert.doesNotMatch(cloud, /@supabase\/supabase-js|signInWithOtp/);
+assert.match(config, /clerkPublishableKey/);
+assert.doesNotMatch(config, /secret|password/i);
+console.log("MindSpark D1 sync contract checks passed");
