@@ -71,7 +71,7 @@ const DB = {
     return statement;
   },
 };
-const env = { DB, CLERK_ISSUER: issuer, CLERK_JWKS_URL: jwksUrl, MINDSPARK_APP_ORIGIN: origin };
+const env = { MINDSPARK_DB: DB, CLERK_ISSUER: issuer, CLERK_JWKS_URL: jwksUrl, MINDSPARK_APP_ORIGIN: origin };
 const makeRequest = async (method, subject, body, options = {}) => new Request(origin + "/api/progress", {
   method,
   headers: {
