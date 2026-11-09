@@ -19,7 +19,8 @@ for (const label of [
 for (const feature of [
   'taskForm', 'cardForm', 'mathForm', 'gameForm', 'reviewEssay',
   'focusSessions', 'quizHistory', 'academyHistory', 'localStorage',
-  'mindspark-learning-v1', 'exportData',
+  'mindspark-learning-v1', 'exportData', 'importFile', '86400000',
+  'study-ai-cards-v1', 'study-ai-stats-v1',
 ]) assert.ok(script.includes(feature), feature + ' is implemented');
 
 assert.ok(html.includes('Your text is analyzed in this browser and is not sent to an AI service'),
