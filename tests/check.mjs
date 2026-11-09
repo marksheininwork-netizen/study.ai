@@ -10,6 +10,7 @@ new Script(script, { filename: 'mindspark.js' });
 assert.ok(html.includes('<meta name="viewport"'), 'responsive viewport is configured');
 assert.ok(html.includes('@media(max-width:650px)'), 'mobile layout exists');
 assert.ok(html.includes('prefers-reduced-motion'), 'reduced-motion preference is supported');
+assert.ok(script.includes('document.querySelector(id)'), 'dynamic selector controls can be bound');
 
 for (const label of [
   'Study AI', 'QuizArena', 'FlashcardLab', 'MathBattle',
