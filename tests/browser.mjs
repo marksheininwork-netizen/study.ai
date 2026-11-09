@@ -35,7 +35,7 @@ const auditAccessibility = async (page, label) => {
 };
 const calculate = (text) => {
   const m = text.match(/(-?\d+)\s*([+−×])\s*(-?\d+)/); assert.ok(m, `math prompt parses: ${text}`);
-  return m[2] === '+' ? +m[1] + +m[3] : m[2] === '−' ? Math.abs(+m[1] - +m[3]) : +m[1] * +m[3];
+  return m[2] === '+' ? +m[1] + +m[3] : m[2] === '−' ? +m[1] - +m[3] : +m[1] * +m[3];
 };
 
 for (const viewport of [{ name: 'desktop', width: 1365, height: 900 }, { name: 'mobile', width: 390, height: 844 }]) {
@@ -124,8 +124,11 @@ for (const viewport of [{ name: 'desktop', width: 1365, height: 900 }, { name: '
   await backupContext.close(); await migrationContext.close();
 
   // MathBattle and the games portal accept correct answers and retain results/streaks.
+  await page.evaluate(() => { const values = [13 / 18, 17 / 18, 0.5]; Math.random = () => values.shift() ?? 0; });
   await clickNav(page, 'math');
+  assert.equal(await page.locator('.question').innerText(), '15 − 19');
   const mathAnswer = calculate(await page.locator('.question').innerText());
+  assert.equal(mathAnswer, -4, 'MathBattle subtraction preserves negative answers');
   await page.getByLabel('Your answer').fill(String(mathAnswer)); await page.getByRole('button', { name: 'Check answer' }).click();
   await page.getByText('Correct — nice work.').waitFor();
   await page.waitForTimeout(800);
