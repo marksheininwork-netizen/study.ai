@@ -45,13 +45,13 @@ Using two separate Clerk development test identities through the deployed stagin
 
 HTTPS preview: https://codex-mindspark-learning-wor.mindspark-learning-staging.pages.dev/
 
-The latest successful Pages preview deployment is `7525c196` for commit `748f46d6a309f538e154ba441bbc5b1e26e670e0`. The Cloudflare Pages project `mindspark-learning-staging` is connected to the PR branch. Production deployments are disabled; production has no D1 binding or Clerk environment variables. The existing public Study AI site was not changed.
+The Cloudflare Pages project `mindspark-learning-staging` is connected to the PR branch, and the stable preview alias above is served by the latest successful branch deployment. Production deployments are disabled; production has no D1 binding or Clerk environment variables. The existing public Study AI site was not changed.
 
 Supabase project creation remains blocked by the account's free project quota. No existing Supabase or D1 project was deleted, repurposed, or migrated. See current [Cloudflare D1 limits](https://developers.cloudflare.com/d1/platform/limits/), [Workers limits](https://developers.cloudflare.com/workers/platform/limits/), [Clerk development environments](https://clerk.com/docs/guides/development/managing-environments), and [Clerk JavaScript quickstart](https://clerk.com/docs/js-frontend/getting-started/quickstart).
 
 ## Remaining blockers
 
-1. Verify cross-device restoration using a second independent browser/device and complete the deployed backup download and restore using a browser that exposes its download location.
+1. Verify backup restoration into a clean guest profile and account sign-in/sync in a physical iPhone browser; desktop and isolated-browser sync passed.
 2. Obtain independent student privacy/legal review, including jurisdiction-specific guardian-consent requirements for any future under-16 accounts; complete a screen-reader/assistive-technology audit.
 3. Before launch, review current vendor limits and verify staging-specific auth/domain configuration again. Production deployment remains an explicit approval step.
 
