@@ -5,6 +5,7 @@ import { extname, resolve, sep } from 'node:path';
 import { chromium } from 'playwright';
 
 const root = resolve(new URL('..', import.meta.url).pathname);
+const axeSource = await readFile(resolve(root, 'node_modules/axe-core/axe.min.js'), 'utf8');
 const mime = { '.html': 'text/html; charset=utf-8', '.js': 'text/javascript; charset=utf-8', '.json': 'application/json' };
 const server = createServer(async (req, res) => {
   try {
@@ -25,6 +26,13 @@ const products = [
   ['academy', 'Stretch your problem-solving'], ['games', 'Quick math streak'],
 ];
 const clickNav = async (page, id) => page.locator(`[data-page="${id}"]:visible`).first().click();
+const auditAccessibility = async (page, label) => {
+  const violations = await page.evaluate(async () => {
+    const result = await window.axe.run(document, { runOnly: { type: 'tag', values: ['wcag2a', 'wcag2aa', 'wcag21a', 'wcag21aa', 'wcag22aa'] } });
+    return result.violations.map(({ id, impact, help, nodes }) => ({ id, impact, help, targets: nodes.map(node => node.target) }));
+  });
+  assert.deepEqual(violations, [], `${label} WCAG A/AA accessibility violations: ${JSON.stringify(violations)}`);
+};
 const calculate = (text) => {
   const m = text.match(/(-?\d+)\s*([+−×])\s*(-?\d+)/); assert.ok(m, `math prompt parses: ${text}`);
   return m[2] === '+' ? +m[1] + +m[3] : m[2] === '−' ? Math.abs(+m[1] - +m[3]) : +m[1] * +m[3];
@@ -36,9 +44,11 @@ for (const viewport of [{ name: 'desktop', width: 1365, height: 900 }, { name: '
   page.on('pageerror', error => failures.push(`${viewport.name}: ${error.message}`));
   await page.goto(base);
   assert.match(await page.title(), /MindSpark Learning/);
+  await page.addScriptTag({ content: axeSource });
   for (const [id, heading] of products) {
     await clickNav(page, id);
     await page.getByRole('heading', { name: heading }).waitFor();
+    await auditAccessibility(page, `${viewport.name} ${id}`);
   }
   if (viewport.name === 'mobile') {
     const dimensions = await page.evaluate(() => ({ width: innerWidth, scroll: document.documentElement.scrollWidth }));
@@ -185,6 +195,8 @@ await clickNav(account, 'study');
 await account.getByLabel('Task', { exact: true }).fill('Private progress for account A');
 await account.getByRole('button', { name: 'Add to my plan' }).click();
 await account.getByRole('button', { name: 'Optional account' }).click();
+await account.addScriptTag({ content: axeSource });
+await auditAccessibility(account, 'account dialog');
 await account.getByLabel('Email address').fill('a@example.test');
 await account.getByRole('button', { name: 'Email me a sign-in code' }).click();
 await account.getByLabel('Six-digit sign-in code').fill('123456');
