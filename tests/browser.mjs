@@ -106,7 +106,7 @@ for (const viewport of [{ name: 'desktop', width: 1365, height: 900 }, { name: '
     localStorage.setItem('study-ai-stats-v1', JSON.stringify({ reviews: 9, known: 6 }));
   });
   await migration.goto(base); await clickNav(migration, 'cards');
-  await migration.getByText('Legacy prompt').waitFor();
+  await migration.getByText('Legacy prompt').first().waitFor();
   assert.deepEqual(await migration.evaluate(() => JSON.parse(localStorage.getItem('mindspark-learning-v1')).cardStats), { reviews: 9, known: 6 });
   await backupContext.close(); await migrationContext.close();
 
