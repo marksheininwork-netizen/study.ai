@@ -18,7 +18,7 @@ This branch extends the existing Study AI app into the MindSpark Learning worksp
 
 `npm test` runs JavaScript/static checks, backend policy contract checks, and Chromium browser interactions at desktop and mobile viewports. Browser checks cover all eight products, task persistence, quizzes, competition questions, card creation/review, legacy migration, backup round-trip and malformed backup handling, math challenges, EssayCoach, focus timer persistence across navigation, and mocked account migration/isolation.
 
-A successful CI run on the updated PR head is required before claiming browser verification. This workspace has no installed browser and cannot retrieve npm packages directly, so local browser execution is unavailable; GitHub Actions can install Chromium. No live Supabase credentials are configured, so the SQL/RLS contract and mocked client flows are tested, while a hosted Supabase integration remains unverified.
+GitHub Actions run 19 passed on PR head `3241f4946d72904bb8ec2e9e6d4da60d7938fcc4`: Chromium interaction checks completed for desktop and mobile, and the mocked account migration/isolation checks passed. This workspace has no installed browser and cannot retrieve npm packages directly, so the browser suite ran in GitHub Actions. No live Supabase credentials are configured, so the SQL/RLS contract and mocked client flows are tested, while a hosted Supabase integration remains unverified.
 
 ## Remaining release work
 
@@ -29,4 +29,4 @@ A successful CI run on the updated PR head is required before claiming browser v
 
 ## Deployment
 
-Do not point the production Study AI URL at this branch until the updated GitHub browser workflow passes and the remaining backend setup and review are complete. No deployment or billing changes were made.
+Do not point the production Study AI URL at this branch until the development backend setup and formal privacy/accessibility reviews are complete. No deployment or billing changes were made.
