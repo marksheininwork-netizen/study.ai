@@ -2,34 +2,31 @@
 
 ## Scope
 
-This branch turns the existing single-page Study AI app into the MindSpark Learning guest workspace. It includes Study AI, QuizArena, FlashcardLab, MathBattle, EssayCoach, FocusRoom, Competition Academy, and Educational Games. MathifyX was deliberately left out of scope.
+This branch extends the existing Study AI app into the MindSpark Learning workspace: Study AI, QuizArena, FlashcardLab, MathBattle, EssayCoach, FocusRoom, Competition Academy, and Educational Games Portal. MathifyX is out of scope and was not changed.
 
-## Verified in this branch
+## Implemented
 
-- JavaScript syntax compiles with Node's `vm.Script`.
-- The repository check asserts all eight product entries and core feature hooks are present.
-- Responsive viewport and mobile layout rules are present in the source.
-- Guest use and the absence of billing are disclosed in the UI.
-- Progress is written to browser local storage; legacy Study AI card and stats keys are migrated.
-- Flashcard review scheduling, JSON backup import/export, and the competition geometry answer key are covered by structural assertions.
-- EssayCoach identifies its checks as local heuristics and says it does not send draft text to an AI service.
-- No authentication, payment, or external AI calls are present in this static app.
+- Eight usable student tools with responsive navigation, dashboards, local progress history, explanations, and student-facing limitation/privacy messages.
+- Free guest mode continues to work without sign-in or network access.
+- Study AI flashcards and recall totals migrate from the existing legacy browser keys. Backup imports merge records and do not replace current progress.
+- Optional email one-time-code accounts and Supabase progress sync are implemented behind empty-by-default development configuration.
+- Sync uses a per-user RLS-protected row, account-specific local caches, optimistic concurrency retries, and local data preservation on sync failure.
+- SQL migration applies explicit authenticated-only SELECT/INSERT/UPDATE policies tied to `auth.uid()`, enables and forces RLS, limits payload size, and revokes anonymous access.
+- EssayCoach is a transparent on-device heuristic, not an AI grader. No live billing or external AI service is enabled.
 
-Run the check with `node tests/check.mjs`.
+## Verification
 
-## Not verified / not included
+`npm test` runs JavaScript/static checks, backend policy contract checks, and Chromium browser interactions at desktop and mobile viewports. Browser checks cover all eight products, task persistence, quizzes, competition questions, card creation/review, legacy migration, backup round-trip and malformed backup handling, math challenges, EssayCoach, focus timer persistence across navigation, and mocked account migration/isolation.
 
-- Browser interaction testing for sign-up, guest, task saving, card migration, quizzes, timers, import/export, and narrow-screen behavior remains pending. The browser-use environment refused local-file URLs, so this pass could not drive the local UI.
-- No deployed preview was created. The feature branch is not the live Study AI site.
-- The existing public deployment was not confirmed to be running this branch.
-- There is no account system, server-side progress sync, subscription flow, or billing integration. Live and test-mode billing are both absent.
-- EssayCoach is a simple local checklist, not an AI writing model, factuality checker, plagiarism checker, or grade.
-- No accessibility audit with assistive technology or formal student privacy review has been completed.
+A successful CI run on the updated PR head is required before claiming browser verification. This workspace has no installed browser and cannot retrieve npm packages directly, so local browser execution is unavailable; GitHub Actions can install Chromium. No live Supabase credentials are configured, so the SQL/RLS contract and mocked client flows are tested, while a hosted Supabase integration remains unverified.
 
-## Release conditions
+## Remaining release work
 
-Before treating this as a public release, run browser-level tests on desktop and mobile for guest entry, local progress persistence and migration, quiz scoring, spaced review, timer completion/pause, and backup round trips. Decide whether the products remain local-first or need an account/sync backend. If subscriptions are later added, first specify and verify test-mode flows; do not enable live billing without approval.
+- Create or select a dedicated development Supabase project, apply the migration, configure OTP email template/redirects, add the development URL and publishable key, and run real authenticated two-user isolation and cross-device tests. No accessible project was appropriate: the active project contains unrelated data and the user's other project is paused/unavailable. No paid branch or project was created.
+- Run an assistive-technology and formal privacy review before public release.
+- No preview deployment was created. The live Study AI site was not modified; this feature branch is not deployed there.
+- Account sync cannot be exercised until the development backend configuration is supplied. No subscription, payment, or billing flow is present.
 
 ## Deployment
 
-Do not point the existing production URL at this branch until the browser-level checks above pass. Deployment and billing were not performed for this change.
+Do not point the production Study AI URL at this branch until the updated GitHub browser workflow passes and the remaining backend setup and review are complete. No deployment or billing changes were made.
