@@ -74,7 +74,7 @@ for(const [k,v] of Object.entries(blank()))if(data[k]===undefined)data[k]=v;
 if(!Array.isArray(data.cards))data.cards=[];
 if(!data.cardStats||!Number.isSafeInteger(data.cardStats.reviews)||!Number.isSafeInteger(data.cardStats.known))data.cardStats={reviews:0,known:0};
 data.cards=data.cards.filter(c=>c&&typeof c.q==="string"&&typeof c.a==="string").map(c=>({id:typeof c.id==="string"?c.id:("card-"+Math.random().toString(36).slice(2)),q:c.q.slice(0,500),a:c.a.slice(0,1000),subject:typeof c.subject==="string"?c.subject.slice(0,80):"General",due:Number.isFinite(c.due)?c.due:0,interval:Number.isInteger(c.interval)?Math.max(0,Math.min(60,c.interval)):0,reviews:Number.isSafeInteger(c.reviews)?c.reviews:0,known:Number.isSafeInteger(c.known)?c.known:0}));
-const $=id=>document.getElementById(id), esc=s=>String(s).replace(/[&<>"']/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
+const $=id=>id.startsWith("#")||id.startsWith("[")?document.querySelector(id):document.getElementById(id), esc=s=>String(s).replace(/[&<>"']/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
 function save(){try{localStorage.setItem(STORE,JSON.stringify(data));$("saveStatus")?.replaceChildren(document.createTextNode("Saved in this browser"))}catch{$("saveStatus")?.replaceChildren(document.createTextNode("Browser storage is full. Export a backup to keep your progress."))}}
 function nav(){for(const id of ["sideNav","mobileNav"]){const host=$(id);host.replaceChildren(...tools.map(t=>{const b=document.createElement("button");b.type="button";b.textContent=id==="sideNav"?t.icon+"  "+t.name:t.icon+" "+t.name.split(" ")[0];b.dataset.page=t.id;b.onclick=()=>go(t.id);return b}))}}
 let page="home";
