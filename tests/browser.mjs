@@ -210,6 +210,7 @@ for (const viewport of [{ name: 'desktop', width: 1365, height: 900 }, { name: '
 // Exercise age-gated Clerk login, guest migration, account switching and per-account progress isolation.
 const accountContext = await browser.newContext({ viewport: { width: 1280, height: 900 } });
 const browserRecords = {};
+let failNextProgressWrite = false;
 await accountContext.addInitScript(() => {
   let current = null;
   const listeners = [];
@@ -242,6 +243,10 @@ await account.route('**/api/progress', async route => {
   if (request.method() === 'DELETE') { delete browserRecords[userId]; return route.fulfill({ contentType: 'application/json', body: JSON.stringify({ deleted: true }) }); }
   const input = JSON.parse(request.postData() || '{}');
   if (request.method() !== 'PUT') return route.fulfill({ status: 405, contentType: 'application/json', body: JSON.stringify({ error: 'Method not allowed' }) });
+  if (failNextProgressWrite) {
+    failNextProgressWrite = false;
+    return route.fulfill({ status: 503, contentType: 'application/json', body: JSON.stringify({ error: 'Staging sync unavailable' }) });
+  }
   const current = browserRecords[userId] || null;
   if ((!current && input.baseVersion !== 0) || (current && current.version !== input.baseVersion)) {
     return route.fulfill({ status: 409, contentType: 'application/json', body: JSON.stringify({ conflict: true, record: current }) });
@@ -280,6 +285,17 @@ await account.getByRole('button', { name: 'Continue with secure sign-in' }).clic
 await account.getByRole('button', { name: 'Test account A' }).click();
 await account.getByText('Progress synced securely to your account.').waitFor();
 assert.equal(browserRecords['user-a'].payload.tasks[0].title, 'Private progress for account A', 'guest data migrates into account A');
+// Simulate a transient server error during an ordinary local save, then recover without losing the device copy.
+failNextProgressWrite = true;
+await account.getByLabel('Task', { exact: true }).fill('Retry after a sync outage');
+await account.getByLabel('Subject', { exact: true }).fill('Science');
+await account.getByRole('button', { name: 'Add to my plan' }).click();
+await account.waitForTimeout(1400);
+await account.getByText(/Sync paused: Staging sync unavailable/).waitFor();
+assert.equal(await account.evaluate(() => window.mindsparkStore.read().tasks.some(task => task.title === 'Retry after a sync outage')), true, 'a transient sync error never discards local progress');
+await account.evaluate(() => window.mindsparkAccount.sync());
+await account.getByText('Progress synced securely to your account.').waitFor();
+assert.ok(browserRecords['user-a'].payload.tasks.some(task => task.title === 'Retry after a sync outage'), 'retry after recovery syncs the preserved local edit');
 await account.getByRole('button', { name: 'Sign out' }).click();
 await account.getByText('Guest learner').waitFor();
 await account.getByRole('button', { name: 'Continue with secure sign-in' }).click();
