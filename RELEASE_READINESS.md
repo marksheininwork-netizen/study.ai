@@ -24,12 +24,12 @@ Using two separate Clerk development test identities through the deployed stagin
 - User B started with an empty workspace, saved a unique QA task, and received a separate D1 row/version. User B did not see User A's cards, task, quiz history, or progress.
 - Signing back into User A restored User A's migrated cards, task, and histories.
 - A direct read-only D1 query showed exactly two distinct subject-scoped rows. User A's row did not contain User B's QA marker; User B's row did not contain User A's data. D1 payloads did not contain test email addresses.
-- The browser reloaded the authenticated app and showed successful sync. **A second independent browser/device session was not available in this verification environment**, so true cross-device sync remains to be confirmed from another device or isolated browser profile.
+- The browser reloaded the authenticated app and showed successful sync. Account A then signed in from a separate Chrome Incognito storage context; the D1-backed cards, task, and recent activity appeared there. This verifies cross-browser synchronization across isolated storage contexts. No physical iPhone account session was available.
 - The deployed API could not be directly opened in this browser due to the browser client's network policy. Server-side authorization, forged/expired token denial, two-subject separation, CSRF denial, conflict handling, and owner-scoped deletion are covered by the automated function tests.
 
 ## Product, mobile, accessibility, and privacy verification
 
-- GitHub Actions [run 48](https://github.com/marksheininwork-netizen/study.ai/actions/runs/42558332182) passed on head `7251ad1e1285f5c30860c9f0ad0bedf0cc4723a1`. It ran JavaScript/structure checks, sync contract tests, signed-JWT/D1 authorization tests, and the Playwright desktop/mobile regression suite.
+- GitHub Actions [run 49](https://github.com/marksheininwork-netizen/study.ai/actions/runs/42558849776) passed on head `748f46d6a309f538e154ba441bbc5b1e26e670e0`. It ran JavaScript/structure checks, sync contract tests, signed-JWT/D1 authorization tests, and the Playwright desktop/mobile regression suite.
 - The suite includes a deterministic regression for the discovered MathBattle negative subtraction defect. In the deployed 390×844 mobile UI, a live challenge `5 − 7` accepted `−2` as correct.
 - The deployed mobile dashboard and all eight product screens rendered at 390×844; the mobile navigation remained usable and the dashboard showed no visible horizontal overflow. Earlier desktop browser checks and CI continue to cover 1365×900.
 - Product interactions covered study task persistence, quizzes and explanations, original contest questions, flashcard reveal/review and legacy migration, focus timer controls/history, game streaks, EssayCoach feedback, account switching, and progress reload.
@@ -38,14 +38,14 @@ Using two separate Clerk development test identities through the deployed stagin
 
 ## Backup verification
 
-- The deployed preview's export control created an accessible, named `mindspark-learning-backup.json` Blob download link, and the fallback link appeared when tested in the browser.
-- The browser UI used here did not provide an observable completed download event or a local path for the downloaded file. Therefore a **completed deployed download and restore are not yet verified**. CI verifies backup JSON creation/import round-trip; it does not replace the requested browser download-and-restore check against the deployed preview.
+- The deployed preview's export control created the named `mindspark-learning-backup.json` Blob download. Chrome showed the downloaded JSON as complete (2,666 bytes).
+- The downloaded file was selected in FlashcardLab's restore control in the same QA account context. Restore completed without an error and retained the two saved cards. The target already contained the same progress, so restoration into a clean guest profile remains to be verified. Automated CI separately covers backup JSON import/merge behavior.
 
 ## Staging and infrastructure
 
 HTTPS preview: https://codex-mindspark-learning-wor.mindspark-learning-staging.pages.dev/
 
-The latest successful Pages preview deployment was `4fb8e225` for commit `7251ad1e1285f5c30860c9f0ad0bedf0cc4723a1`. The Cloudflare Pages project `mindspark-learning-staging` is connected to the PR branch. Production deployments are disabled; production has no D1 binding or Clerk environment variables. The existing public Study AI site was not changed.
+The latest successful Pages preview deployment is `7525c196` for commit `748f46d6a309f538e154ba441bbc5b1e26e670e0`. The Cloudflare Pages project `mindspark-learning-staging` is connected to the PR branch. Production deployments are disabled; production has no D1 binding or Clerk environment variables. The existing public Study AI site was not changed.
 
 Supabase project creation remains blocked by the account's free project quota. No existing Supabase or D1 project was deleted, repurposed, or migrated. See current [Cloudflare D1 limits](https://developers.cloudflare.com/d1/platform/limits/), [Workers limits](https://developers.cloudflare.com/workers/platform/limits/), [Clerk development environments](https://clerk.com/docs/guides/development/managing-environments), and [Clerk JavaScript quickstart](https://clerk.com/docs/js-frontend/getting-started/quickstart).
 
