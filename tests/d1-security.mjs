@@ -20,24 +20,30 @@ jwk.use = "sig";
 jwk.alg = "RS256";
 const originalFetch = globalThis.fetch;
 let clerkDeleteStatus = 200;
+let clerkRevokeStatus = 204;
 const clerkDeletedUsers = [];
+const clerkIdentityDeleted = new Set();
 const revokedSessions = [];
 globalThis.fetch = async (url, options = {}) => {
   if (String(url) === jwksUrl) return Response.json({ keys: [jwk] });
   if (String(url).startsWith("https://api.clerk.com/v1/sessions?")) {
     assert.match(options.headers.Authorization, /^Bearer sk_test_/);
     const userId = new URL(String(url)).searchParams.get("user_id");
+    if (clerkIdentityDeleted.has(userId)) return Response.json({ error: "User no longer exists" }, { status: 404 });
     return Response.json({ data: [{ id: "sess_" + userId }], total_count: 1 });
   }
   if (String(url).includes("/sessions/") && String(url).endsWith("/revoke")) {
     assert.equal(options.method, "POST");
     revokedSessions.push(decodeURIComponent(String(url).split("/").at(-2)));
-    return new Response(null, { status: 204 });
+    return new Response(null, { status: clerkRevokeStatus });
   }
   assert.match(String(url), /^https:\/\/api\.clerk\.com\/v1\/users\//);
   assert.equal(options.method, "DELETE");
   assert.match(options.headers.Authorization, /^Bearer sk_test_/);
-  clerkDeletedUsers.push(decodeURIComponent(String(url).split("/").at(-1)));
+  const userId = decodeURIComponent(String(url).split("/").at(-1));
+  clerkDeletedUsers.push(userId);
+  if (clerkIdentityDeleted.has(userId)) return new Response('{"error":"User no longer exists"}', { status: 404, headers: { "Content-Type": "application/json" } });
+  if (clerkDeleteStatus === 200) clerkIdentityDeleted.add(userId);
   return new Response(clerkDeleteStatus === 200 ? '{"deleted":true}' : '{"error":"provider failure"}', { status: clerkDeleteStatus, headers: { "Content-Type": "application/json" } });
 };
 clearAuthKeyCacheForTests();
@@ -154,6 +160,18 @@ assert.deepEqual(clerkDeletedUsers, ["user_b"], "account deletion calls Clerk on
 assert.deepEqual(revokedSessions, ["sess_user_b"], "account deletion explicitly revokes every active session");
 response = await onRequestGet({ request: await makeRequest("GET", "user_b"), env });
 assert.equal(response.status, 410, "stale signed JWTs cannot read progress after deletion");
+response = await onRequestDeleteAccount({ request: await makeRequest("DELETE", "user_b", undefined, {}, "/api/account"), env });
+assert.equal(response.status, 200, "repeating account deletion is safe after Clerk has already removed the identity");
+assert.deepEqual(clerkDeletedUsers.filter((userId) => userId === "user_b"), ["user_b", "user_b"], "retry only targets the authenticated subject and treats Clerk's already-deleted response as success");
+assert.deepEqual(revokedSessions, ["sess_user_b"], "idempotent retry does not attempt to revoke sessions that no longer exist");
+
+// Authentication is required before a deletion request can change D1 or call Clerk.
+await onRequestPut({ request: await makeRequest("PUT", "user_c", { payload: progressA, baseVersion: 0 }), env });
+const deletionCallsBeforeAnonymous = clerkDeletedUsers.length;
+response = await onRequestDeleteAccount({ request: await makeRequest("DELETE", null, undefined, {}, "/api/account"), env });
+assert.equal(response.status, 401, "anonymous account deletion is denied");
+assert.equal(rows.has("user_c"), true, "unauthenticated deletion preserves cloud progress");
+assert.equal(clerkDeletedUsers.length, deletionCallsBeforeAnonymous, "unauthenticated deletion never contacts Clerk");
 
 // A missing development secret never erases data or sends a provider request.
 await onRequestPut({ request: await makeRequest("PUT", "user_a", { payload: progressA, baseVersion: 0 }), env });
@@ -180,6 +198,17 @@ response = await onRequestDeleteAccount({ request: await makeRequest("DELETE", "
 assert.equal(response.status, 200, "valid deletion retries can finish provider cleanup after progress is tombstoned");
 response = await onRequestPut({ request: await makeRequest("PUT", "user_a", { payload: progressA, baseVersion: 0 }), env });
 assert.equal(response.status, 410, "stale session tokens cannot recreate a deleted user's progress");
+
+// Session revocation failure also leaves the tombstone in place and can be retried safely.
+clerkRevokeStatus = 503;
+response = await onRequestDeleteAccount({ request: await makeRequest("DELETE", "user_c", undefined, {}, "/api/account"), env });
+assert.equal(response.status, 502, "session revocation failure is reported as partial completion");
+assert.equal(JSON.parse(rows.get("user_c").payload).__mindsparkDeletedAccount, true, "progress remains blocked while session cleanup is incomplete");
+assert.equal(clerkIdentityDeleted.has("user_c"), false, "the Clerk identity is not deleted until active sessions are revoked");
+clerkRevokeStatus = 204;
+response = await onRequestDeleteAccount({ request: await makeRequest("DELETE", "user_c", undefined, {}, "/api/account"), env });
+assert.equal(response.status, 200, "session revocation failures can be retried with the same authenticated subject");
+assert.equal(clerkIdentityDeleted.has("user_c"), true);
 
 globalThis.fetch = originalFetch;
 console.log("D1 API authentication, owner isolation, CSRF, conflict handling, and deletion checks passed");
