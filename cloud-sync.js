@@ -7,6 +7,7 @@
   const emailForm = document.getElementById("accountEmailForm");
   const codeForm = document.getElementById("accountCodeForm");
   const signOut = document.getElementById("accountSignOut");
+  const resend = document.getElementById("accountResend");
   let client = window.__MINDSPARK_TEST_SUPABASE_CLIENT__ || null;
   let user = null;
   let timer = null;
@@ -39,7 +40,9 @@
       // Guest state is merged before every write, so account creation never replaces local progress.
       const owner = localStorage.getItem(OWNER_KEY);
       if (owner !== user.id) {
-        if (owner) localStorage.setItem(CACHE_PREFIX + owner, JSON.stringify(window.mindsparkStore.read()));
+        const previous = owner ? window.mindsparkStore.read() : null;
+        try { if (owner) localStorage.setItem(CACHE_PREFIX + owner, JSON.stringify(previous)); }
+        catch { window.mindsparkStore.replace(null); throw new Error("This device cannot safely switch accounts because its storage is full. Export the current progress before trying again."); }
         const cached = localStorage.getItem(CACHE_PREFIX + user.id);
         window.mindsparkStore.replace(cached ? JSON.parse(cached) : null);
       }
@@ -90,6 +93,11 @@
       setSignedIn(data.user);
       await syncProgress();
     } catch (error) { setStatus(error?.message || "That code could not be verified. Request a new code and try again."); }
+  });
+  resend?.addEventListener("click", async () => {
+    setStatus("Sending a new sign-in code…");
+    try { const api = await getClient(); const { error } = await api.auth.signInWithOtp({ email: document.getElementById("accountEmail").value.trim(), options: { shouldCreateUser: true } }); if (error) throw error; setStatus("A new code was sent. Use the newest message in your inbox."); }
+    catch (error) { setStatus(error?.message || "Could not send a new code. Try again shortly."); }
   });
   signOut?.addEventListener("click", async () => {
     try { const api = await getClient(); const { error } = await api.auth.signOut(); if (error) throw error; setSignedIn(null); setStatus("Signed out. This browser's guest progress is still here."); }

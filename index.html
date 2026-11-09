@@ -26,7 +26,7 @@ dialog{border:0;border-radius:18px;padding:24px;max-width:min(560px,calc(100vw -
 </main>
 </div>
 <nav class="mobile-nav" id="mobileNav" aria-label="Main navigation"></nav>
-<dialog id="accountDialog" aria-labelledby="accountTitle"><form method="dialog" class="dialog-close"><button class="secondary" aria-label="Close account dialog">Close</button></form><div id="accountPanel"><h2 id="accountTitle">Optional account sync</h2><p class="muted">Guest mode is free and works without an account. An account can sync your learning history across devices. Only your MindSpark progress is synced.</p><p class="notice">If you are under 13, ask a parent or guardian before using an email account. Never share passwords or school login credentials.</p><div id="accountConfigMessage" class="muted" role="status"></div><form id="accountEmailForm" class="stack"><label for="accountEmail">Email address</label><input class="field" id="accountEmail" type="email" autocomplete="email" required><button class="primary">Email me a sign-in code</button></form><form id="accountCodeForm" class="stack hidden"><label for="accountCode">Six-digit sign-in code</label><input class="field" id="accountCode" inputmode="numeric" autocomplete="one-time-code" maxlength="6" required><button class="primary">Verify and sync</button></form><div class="row"><button class="secondary hidden" id="accountSignOut" type="button">Sign out</button><span id="accountStatus" class="muted" role="status"></span></div></div></dialog>
+<dialog id="accountDialog" aria-labelledby="accountTitle"><form method="dialog" class="dialog-close"><button class="secondary" aria-label="Close account dialog">Close</button></form><div id="accountPanel"><h2 id="accountTitle">Optional account sync</h2><p class="muted">Guest mode is free and works without an account. An account can sync your learning history across devices. Only your MindSpark progress is synced.</p><p class="notice">If you are under 13, ask a parent or guardian before using an email account. Never share passwords or school login credentials.</p><div id="accountConfigMessage" class="muted" role="status"></div><form id="accountEmailForm" class="stack"><label for="accountEmail">Email address</label><input class="field" id="accountEmail" type="email" autocomplete="email" required><button class="primary">Email me a sign-in code</button></form><form id="accountCodeForm" class="stack hidden"><label for="accountCode">Six-digit sign-in code</label><input class="field" id="accountCode" inputmode="numeric" autocomplete="one-time-code" maxlength="6" required><button class="primary">Verify and sync</button><button class="secondary" id="accountResend" type="button">Send a new code</button></form><div class="row"><button class="secondary hidden" id="accountSignOut" type="button">Sign out</button><span id="accountStatus" class="muted" role="status"></span></div></div></dialog>
 <script src="mindspark-config.js" defer></script>
 <script src="cloud-sync.js" defer></script>
 <script>
@@ -62,11 +62,12 @@ const contest=[
  {topic:"Logic",q:"All glips are blue. No blue things are square. Which must be true?",a:["Some glips are square","No glips are square","All squares are glips","All blue things are glips"],correct:1,why:"Since every glip is blue and no blue thing is square, no glip is square."}
 ];
 const blank=()=>({cards:[],cardStats:{reviews:0,known:0},tasks:[],quizHistory:[],academyHistory:[],mathHistory:[],gameBest:0,focusSessions:[],essayChecks:0,createdAt:Date.now()});
-let data;
+let data,migrated=false;
 try{
  const saved=localStorage.getItem(STORE);
  data=saved?JSON.parse(saved):blank();
  if(!saved){
+  migrated=true;
   const oldCards=JSON.parse(localStorage.getItem("study-ai-cards-v1")||"[]");
   if(Array.isArray(oldCards))data.cards=oldCards.filter(c=>c&&typeof c.q==="string"&&typeof c.a==="string").map(c=>({id:typeof c.id==="string"?c.id:("legacy-"+Math.random().toString(36).slice(2)),q:c.q.slice(0,500),a:c.a.slice(0,1000),subject:typeof c.subject==="string"?c.subject.slice(0,80):"General",due:Number.isFinite(c.due)?c.due:0,interval:Number.isInteger(c.interval)?Math.max(0,Math.min(60,c.interval)):0,reviews:0,known:0}));
   const oldStats=JSON.parse(localStorage.getItem("study-ai-stats-v1")||"null");
@@ -137,7 +138,7 @@ function timerDraw(){const d=$("timerDisplay");if(d)d.textContent=String(Math.fl
 function timerStop(){if(timerId){clearInterval(timerId);timerId=null}}
 function timerToggle(){if(timerId){timerStop();$("timerToggle").textContent="Resume focus";timerMessage="Paused. Take a breath, then continue when ready.";$("timerStatus").textContent=timerMessage;return}if(!focusStarted)focusStarted=true;timerMessage="Focused time is running.";$("timerToggle").textContent="Pause";$("timerStatus").textContent=timerMessage;lastTick=Date.now();timerId=setInterval(()=>{let now=Date.now(),elapsed=Math.floor((now-lastTick)/1000);if(elapsed<1)return;remaining=Math.max(0,remaining-elapsed);focusElapsed+=elapsed;lastTick+=elapsed*1000;timerDraw();if(!remaining){timerStop();const mins=Math.max(1,Math.round(focusElapsed/60));data.focusSessions.push({id:"focus-"+Date.now()+"-"+Math.random().toString(36).slice(2),label:"Focus session",minutes:mins,day:day()});data.focusSessions=data.focusSessions.slice(-100);focusElapsed=0;timerMessage="Session complete — "+mins+" focused minutes recorded.";save();if($("timerStatus"))$("timerStatus").textContent=timerMessage;focusStarted=false;if($("timerToggle"))$("timerToggle").textContent="Start another session"}},400)}
 function exportData(){const blob=new Blob([JSON.stringify({product:"MindSpark Learning",version:1,exportedAt:new Date().toISOString(),cards:data.cards,stats:data.cardStats,data},null,2)],{type:"application/json"}),url=URL.createObjectURL(blob),a=document.createElement("a");a.href=url;a.download="mindspark-learning-backup.json";a.click();setTimeout(()=>URL.revokeObjectURL(url),1000)}
-nav();go("home");
+nav();go("home");if(migrated)save();
 })();
 </script>
 </body>

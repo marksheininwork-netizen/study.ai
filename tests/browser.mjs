@@ -108,6 +108,8 @@ for (const viewport of [{ name: 'desktop', width: 1365, height: 900 }, { name: '
   await migration.goto(base); await clickNav(migration, 'cards');
   await migration.getByText('Legacy prompt').first().waitFor();
   assert.deepEqual(await migration.evaluate(() => JSON.parse(localStorage.getItem('mindspark-learning-v1')).cardStats), { reviews: 9, known: 6 });
+  await migration.reload(); await clickNav(migration, 'cards');
+  await migration.getByText('Legacy prompt').first().waitFor();
   await backupContext.close(); await migrationContext.close();
 
   // MathBattle and the games portal accept correct answers and retain results/streaks.
