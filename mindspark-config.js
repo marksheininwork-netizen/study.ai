@@ -1,2 +1,2 @@
-/* Development configuration only. The publishable key is intended for browser use; never put a secret key here. */
-window.MINDSPARK_CONFIG = { url: "", publishableKey: "" };
+/* Clerk publishable keys are public. Keep issuer/JWKS values in the Cloudflare Pages preview environment. */
+window.MINDSPARK_CONFIG = { clerkPublishableKey: "" };
