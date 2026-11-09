@@ -23,17 +23,15 @@ Tasks, cards, scores, writing-review counts, and focus sessions save in browser 
 
 Signed-in account deletion requires a server-only Clerk development secret (`CLERK_SECRET_KEY`) in the staging Pages preview environment. The endpoint authenticates the current subject, replaces synced progress with a minimal deletion tombstone, revokes active sessions, and asks Clerk to delete that identity. A provider failure leaves sync blocked and returns a retryable partial-completion message. The current browser's account cache is cleared after success; other devices can retain local cached progress until the learner clears it there.
 
-EssayCoach runs in the browser and never sends draft text to an AI service. Avoid entering identifying or sensitive information. Account use is optional; learners under 13 should get parent or guardian approval before using email sign-in. Do not use school credentials.
+EssayCoach runs in the browser and never sends draft text to an AI service. Avoid entering identifying or sensitive information. Cloud accounts require an unverified self-attestation of age 16 or older; the app does not verify age or provide a guardian-consent flow. Learners under 16 can use guest mode. This does not determine whether guest or account use is appropriate for a particular student or jurisdiction; obtain independent legal/privacy review before serving minors. Do not use school credentials.
 
-## Optional Supabase account sync
+## Optional account sync
 
-1. Create an isolated development Supabase project. Do not reuse a project with unrelated data.
-2. Apply `supabase/migrations/202611080001_mindspark_progress.sql`.
-3. Configure Supabase email authentication to send a six-digit code (email template uses `{{ .Token }}`) and set the correct local/preview redirect URLs.
-4. Set `url` and the browser-safe **publishable** key in `mindspark-config.js`. Never use a secret or `service_role` key in the browser.
-5. Use a development-only account and verify authentication, RLS isolation, and backup restoration before enabling it in a shared preview.
+The current development architecture uses Clerk email-code authentication with owner-scoped Cloudflare D1 storage. Guest mode remains fully usable without a login, account service, or network connection. Cloud sync stores a random Clerk subject identifier, learning progress, a version, and update time. It does not store the email in D1; EssayCoach draft text is excluded.
 
-The first account sign-in merges guest data with existing account progress. Simultaneous device writes retry using an update timestamp; account switching stores a separate local cache per account. The table only permits authenticated users to read, insert, and update their own row. Cloud sync is intentionally disabled until a development project is configured.
+The existing Cloudflare Pages project is staging-only. Its preview configuration uses the public Clerk issuer, JWKS URL, allowed staging origin, and `MINDSPARK_DB` binding. The browser publishable key in `mindspark-config.js` is public. The Clerk backend secret must never be placed in browser code, source control, or chat; account deletion requires `CLERK_SECRET_KEY` in the Cloudflare Pages **Preview** environment only. Do not add it to Production.
+
+The app requires a 16+ self-attestation before cloud sign-in. That checkbox is not age verification or guardian consent. The correct age range, consent requirements, privacy notices, retention and deletion periods, and vendor terms require independent review before launch. No legal compliance conclusion is made.
 
 ## Checks
 
@@ -45,4 +43,4 @@ npx playwright install chromium
 npm test
 ```
 
-The browser suite covers desktop and mobile navigation across all eight products, saved tasks, quiz and contest scoring, flashcard review, legacy migration, exact full-field guest restore, malformed/duplicate/older/partial backup behavior, MathBattle, EssayCoach, FocusRoom completion across navigation, dialog focus containment, and mocked account migration/isolation/deletion. The SQL integration-contract test checks the RLS policy shape. A live Supabase integration run still requires an isolated development project and configured auth email flow.
+The browser suite covers desktop and mobile navigation and first-run states across all eight products, saved tasks, quiz and contest scoring, flashcard review, legacy migration, exact full-field guest restore, malformed/interrupted/duplicate/older/partial backup behavior, MathBattle, EssayCoach, FocusRoom completion across navigation, axe accessibility scans, dialog keyboard containment, and mocked account migration/isolation/deletion. D1/JWT security tests exercise owner isolation and deletion flows with a mocked Clerk backend. Real Clerk deletion requires the development secret in staging Preview settings; CI mocks do not substitute for a live provider test.
