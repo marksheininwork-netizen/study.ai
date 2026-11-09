@@ -148,6 +148,18 @@ for (const viewport of [{ name: 'desktop', width: 1365, height: 900 }, { name: '
     await restore.waitForFunction(() => document.querySelector('#importStatus')?.textContent.startsWith('Import failed:'));
     assert.deepEqual(await restore.evaluate(() => window.mindsparkStore.read()), snapshot, `${name} preserves all existing progress`);
   }
+  // A file read interrupted by the browser must fail atomically as well.
+  await restore.evaluate(() => {
+    const read = File.prototype.text;
+    File.prototype.text = function() {
+      return this.name === "interrupted.json" ? Promise.reject(new Error("Backup read was interrupted.")) : read.call(this);
+    };
+  });
+  await restore.locator('#importFile').setInputFiles({ name: 'interrupted.json', mimeType: 'application/json', buffer: Buffer.from(JSON.stringify({ product:'MindSpark Learning',version:1,data:{ tasks:[{ id:'interrupted-task',title:'Must not be applied',done:false }] } })) });
+  await restore.waitForFunction(() => document.querySelector('#importStatus')?.textContent.includes('Import failed: Backup read was interrupted.'));
+  assert.deepEqual(await restore.evaluate(() => window.mindsparkStore.read()), snapshot, 'an interrupted backup read preserves every existing field');
+  await restore.evaluate(() => { delete File.prototype.text; });
+
   const atLimit = { ...snapshot, tasks: Array.from({ length: 1000 }, (_, index) => ({ id: `limit-${index}`, title: `Task ${index}`, done: false })) };
   await restore.evaluate(value => window.mindsparkStore.replace(value), atLimit);
   await restore.locator('#importFile').setInputFiles({ name: 'over-limit-partial.json', mimeType: 'application/json', buffer: Buffer.from(JSON.stringify({ product:'MindSpark Learning',version:1,data:{ tasks:[{ id:'overflow-task',title:'Must not be dropped' }] } })) });
