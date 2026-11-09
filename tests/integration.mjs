@@ -26,7 +26,7 @@ assert.match(auth, /claims\.sub/);
 assert.doesNotMatch(auth, /CLERK_SECRET_KEY|service_role/i, "no secret identity credential is expected by this verifier");
 assert.match(cloud, /mindspark-account-cache:/);
 assert.match(cloud, /baseVersion: remoteVersion/);
-assert.match(cloud, /status === 409/);
+assert.match(cloud, /status !== 409/);
 assert.match(cloud, /ageConfirm/);
 assert.match(cloud, /credentials: "same-origin"/);
 assert.doesNotMatch(cloud, /@supabase\/supabase-js|signInWithOtp/);
