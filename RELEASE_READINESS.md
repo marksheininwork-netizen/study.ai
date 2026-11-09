@@ -169,3 +169,23 @@ PR #2 remains draft and unmerged. Production deployment and live billing are dis
 
 - Final documentation head `db0b83b7a6bc4620105bfb167de3653bc7d8f23a` passed GitHub Actions [run 69](https://github.com/marksheininwork-netizen/study.ai/actions/runs/42708722326). The complete `npm test` job succeeded. Cloudflare Pages deployment `b835d80f-6872-49d8-8d18-4e873a2cc29e` succeeded for that same head and serves the stable preview alias above with the dedicated D1 binding. `CLERK_SECRET_KEY` remains absent from the preview environment.
 
+
+
+## Continuation verification — 2026-11-09 (supersedes older status above)
+
+- PR #2 remains open, draft, and unmerged. The verified code head before this documentation-only update was `cdf9c448dc6269f2f71dd3849f6a3ae0b7d2a79e`. GitHub Actions run [76](https://github.com/marksheininwork-netizen/study.ai/actions/runs/42712605288) passed the complete `npm test` verification job: structure checks, sync and D1/JWT security tests, desktop/mobile Playwright flows, and axe scans.
+- Cloudflare Pages deployment `f56ca61f-7b67-4233-a1ac-f74257801c7d` succeeded for that exact code head with the staging D1 binding. The hash preview and stable alias are https://f56ca61f.mindspark-learning-staging.pages.dev/ and https://codex-mindspark-learning-wor.mindspark-learning-staging.pages.dev/ .
+- The eight product areas' first-run views are covered at desktop and mobile viewport sizes. CI checks guest persistence, product navigation/interactions, empty/error states, responsive overflow, accessibility, import/export, and account/sync cases. Viewport coverage is not a physical-device test.
+- A real browser file chooser on the fresh, unique-origin latest staging deployment imported the synthetic full backup. FlashcardLab showed the restored card and its 7 reviews / 71% recall; repeating the import kept a single card. A valid partial backup merged an additional task and game-best score while preserving the earlier task. A malformed backup showed an import error, and subsequent Study AI/FlashcardLab views confirmed the tasks and card were still present. This is deployed UI evidence for restore, repeat, partial merge, and malformed-file preservation; the exact comparison of every supported state field and interrupted File.text failure are exercised by Playwright in CI, not claimed as a live manual state-dump comparison.
+- Export on this run was not captured as a native downloaded file from the in-app browser. A normal Chrome download was verified on an earlier deployment (run 69 documentation records that evidence); re-check native download behavior on the current staging deployment before release.
+- Current Cloudflare Pages Preview configuration exposes only the public issuer/JWKS and allowed staging origin, and has the staging D1 binding. The Preview environment does not contain `CLERK_SECRET_KEY`; this check did not reveal its value. No disposable Clerk identity was created, and no live create/delete/session-revocation/request-denial flow was run. The development-only key must be configured privately before that specific test. Production environment remains untouched.
+- The account age guard is an unverified 16+ self-attestation; guest access remains available without an account. The copy now explicitly says the assertion is not independently verified and is not guardian consent. The README now documents the Clerk development + D1 architecture rather than stale Supabase setup. These technical safeguards do not determine legal obligations.
+- Independent legal/privacy review remains necessary for audience/age assurance, consent and guardian duties, student-facing notices/terms, Clerk and Cloudflare terms, data retention/deletion, and applicable jurisdictions. The PR does not claim legal compliance. A physical iPhone Safari/Chrome pass and manual VoiceOver review remain outstanding. No billing or production deployment was enabled, and no change was made to the public Study AI site or MathifyX.
+
+### Verified remaining release blockers
+
+1. Owner configures the Clerk development `sk_test_` secret in Cloudflare Pages Preview only, then authorizes and runs the disposable account lifecycle test (creation, sign-in, deletion, revocation, and denial of subsequent requests); clean up the test identity.
+2. Authorized tester completes physical iPhone Safari/Chrome and VoiceOver checks and records results.
+3. Independent legal/privacy reviewer resolves the age/consent, notices, retention, deletion, vendor, and jurisdiction questions.
+4. Re-test native export download on the current staging deployment; import is verified above, but current-deployment native download capture remains open.
+
